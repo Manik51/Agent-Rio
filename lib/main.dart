@@ -58,11 +58,11 @@ void main() async {
   }
 
   final prefs = await SharedPreferences.getInstance();
-  final themeStr = prefs.getString('themeMode');
-  if (themeStr == 'dark') {
-    themeNotifier.value = ThemeMode.dark;
-  } else {
+  final themeStr = prefs.getString('themeMode') ?? 'dark';
+  if (themeStr == 'light') {
     themeNotifier.value = ThemeMode.light;
+  } else {
+    themeNotifier.value = ThemeMode.dark;
   }
 
   final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;

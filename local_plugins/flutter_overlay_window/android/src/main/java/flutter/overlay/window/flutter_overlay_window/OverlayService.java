@@ -338,7 +338,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
         }
 
         createNotificationChannel();
-        Intent notificationIntent = new Intent(this, FlutterOverlayWindowPlugin.class);
+        Intent notificationIntent = getApplicationContext().getPackageManager()
+                .getLaunchIntentForPackage(getApplicationContext().getPackageName());
+        if (notificationIntent == null) {
+            notificationIntent = new Intent();
+        }
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
         int pendingFlags;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
             pendingFlags = PendingIntent.FLAG_IMMUTABLE;
@@ -349,8 +354,8 @@ public class OverlayService extends Service implements View.OnTouchListener {
                 0, notificationIntent, pendingFlags);
         final int notifyIcon = getDrawableResourceId("mipmap", "launcher");
         Notification notification = new NotificationCompat.Builder(this, OverlayConstants.CHANNEL_ID)
-                .setContentTitle(WindowSetup.overlayTitle)
-                .setContentText(WindowSetup.overlayContent)
+                .setContentTitle(WindowSetup.overlayTitle != null && !WindowSetup.overlayTitle.isEmpty() ? WindowSetup.overlayTitle : "Agent Rio")
+                .setContentText(WindowSetup.overlayContent != null && !WindowSetup.overlayContent.isEmpty() ? WindowSetup.overlayContent : "Floating Assistant")
                 .setSmallIcon(notifyIcon == 0 ? R.drawable.notification_icon : notifyIcon)
                 .setContentIntent(pendingIntent)
                 .setVisibility(WindowSetup.notificationVisibility)

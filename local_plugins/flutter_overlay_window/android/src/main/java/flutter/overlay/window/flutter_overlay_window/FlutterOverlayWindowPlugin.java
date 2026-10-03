@@ -66,10 +66,20 @@ public class FlutterOverlayWindowPlugin implements
         if (call.method.equals("checkPermission")) {
             result.success(checkOverlayPermission());
         } else if (call.method.equals("requestPermission")) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (checkOverlayPermission()) {
+                result.success(true);
+                return;
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
-                intent.setData(Uri.parse("package:" + mActivity.getPackageName()));
-                mActivity.startActivityForResult(intent, REQUEST_CODE_FOR_OVERLAY_PERMISSION);
+                intent.setData(Uri.parse("package:" + (mActivity != null ? mActivity.getPackageName() : context.getPackageName())));
+                if (mActivity != null) {
+                    mActivity.startActivityForResult(intent, REQUEST_CODE_FOR_OVERLAY_PERMISSION);
+                } else {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(intent);
+                }
+                result.success(checkOverlayPermission());
             } else {
                 result.success(true);
             }
@@ -107,7 +117,11 @@ public class FlutterOverlayWindowPlugin implements
             intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
             intent.putExtra("startX", startX);
             intent.putExtra("startY", startY);
-            context.startService(intent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
             result.success(null);
         } else if (call.method.equals("isOverlayActive")) {
             result.success(OverlayService.isRunning);
@@ -143,6 +157,7 @@ public class FlutterOverlayWindowPlugin implements
     @Override
     public void onAttachedToActivity(@NonNull ActivityPluginBinding binding) {
         mActivity = binding.getActivity();
+        binding.addActivityResultListener(this);
         if (FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG) == null) {
             FlutterEngineGroup enn = new FlutterEngineGroup(context);
             DartExecutor.DartEntrypoint dEntry = new DartExecutor.DartEntrypoint(
@@ -160,10 +175,12 @@ public class FlutterOverlayWindowPlugin implements
     @Override
     public void onReattachedToActivityForConfigChanges(@NonNull ActivityPluginBinding binding) {
         this.mActivity = binding.getActivity();
+        binding.addActivityResultListener(this);
     }
 
     @Override
     public void onDetachedFromActivity() {
+        this.mActivity = null;
     }
 
     @Override
@@ -185,7 +202,12 @@ public class FlutterOverlayWindowPlugin implements
     @Override
     public boolean onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == REQUEST_CODE_FOR_OVERLAY_PERMISSION) {
-            pendingResult.success(checkOverlayPermission());
+            if (pendingResult != null) {
+                try {
+                    pendingResult.success(checkOverlayPermission());
+                } catch (Exception ignored) {}
+                pendingResult = null;
+            }
             return true;
         }
         return false;

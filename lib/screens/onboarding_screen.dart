@@ -32,13 +32,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   bool _isOverlayGranted = false;
 
   // AI config states
-  String _selectedProvider = 'deepseek';
+  String _selectedProvider = 'groq';
   final TextEditingController _apiKeyController = TextEditingController();
   final TextEditingController _baseUrlController = TextEditingController(
-    text: 'https://api.deepseek.com',
+    text: 'https://api.groq.com/openai/v1',
   );
   final TextEditingController _modelController = TextEditingController(
-    text: 'deepseek-chat',
+    text: 'llama-3.3-70b-versatile',
   );
   bool _obscureKey = true;
   bool _isValidating = false;
@@ -157,21 +157,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     setState(() {
       _selectedProvider = provider;
       _validationError = null;
-      if (provider == 'deepseek') {
-        _baseUrlController.text = 'https://api.deepseek.com';
-        _modelController.text = 'deepseek-chat';
-      } else if (provider == 'groq') {
+      if (provider == 'groq') {
         _baseUrlController.text = 'https://api.groq.com/openai/v1';
         _modelController.text = 'llama-3.3-70b-versatile';
+      } else if (provider == 'gemini') {
+        _baseUrlController.text = 'https://generativelanguage.googleapis.com/v1beta/openai/';
+        _modelController.text = 'gemini-1.5-flash';
+      } else if (provider == 'openrouter') {
+        _baseUrlController.text = 'https://openrouter.ai/api/v1';
+        _modelController.text = 'google/gemini-2.0-flash-exp:free';
       } else if (provider == 'nvidia') {
         _baseUrlController.text = AiService.nvidiaBaseUrl;
         _modelController.text = AiService.nvidiaDefaultModel;
-      } else if (provider == 'ollama') {
-        _baseUrlController.text = 'http://10.0.2.2:11434/v1';
-        _modelController.text = 'gemma2';
-      } else if (provider == 'local') {
-        _baseUrlController.text = 'http://10.0.2.2:1234/v1';
-        _modelController.text = 'qwen2.5-7b-instruct';
       } else {
         _baseUrlController.clear();
         _modelController.clear();
@@ -1114,40 +1111,33 @@ class _OnboardingScreenState extends State<OnboardingScreen>
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               children: [
+                _buildProviderCard('groq', 'Groq (Free)', Icons.bolt_rounded, isDark),
+                const SizedBox(width: 10),
                 _buildProviderCard(
-                  'deepseek',
-                  'DeepSeek',
-                  Icons.analytics_rounded,
+                  'gemini',
+                  'Google Gemini',
+                  Icons.auto_awesome_rounded,
                   isDark,
                 ),
                 const SizedBox(width: 10),
-                _buildProviderCard('groq', 'Groq', Icons.speed_rounded, isDark),
+                _buildProviderCard(
+                  'openrouter',
+                  'OpenRouter',
+                  Icons.hub_rounded,
+                  isDark,
+                ),
                 const SizedBox(width: 10),
                 _buildProviderCard(
                   'nvidia',
-                  'NVIDIA',
+                  'NVIDIA NIM',
                   Icons.memory_rounded,
                   isDark,
                 ),
                 const SizedBox(width: 10),
                 _buildProviderCard(
-                  'ollama',
-                  'Ollama',
-                  Icons.computer_rounded,
-                  isDark,
-                ),
-                const SizedBox(width: 10),
-                _buildProviderCard(
-                  'local',
-                  'Local Server',
-                  Icons.dns_rounded,
-                  isDark,
-                ),
-                const SizedBox(width: 10),
-                _buildProviderCard(
                   'custom',
-                  'Custom',
-                  Icons.settings_suggest_rounded,
+                  'Custom API',
+                  Icons.tune_rounded,
                   isDark,
                 ),
               ],
@@ -1190,7 +1180,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 _buildFormTextField(
                   controller: _modelController,
                   label: 'Model Name',
-                  hint: 'deepseek-chat',
+                  hint: 'llama-3.3-70b-versatile',
                   isDark: isDark,
                   suffix: IconButton(
                     icon: _isValidating

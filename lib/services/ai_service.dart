@@ -10,15 +10,107 @@ class AiResponse {
   AiResponse(this.content, this.totalTokens);
 }
 
+class AiProviderPreset {
+  final String id;
+  final String name;
+  final String baseUrl;
+  final String defaultModel;
+  final List<String> popularModels;
+  final String keyUrl;
+  final String keyHint;
+  final String description;
+
+  const AiProviderPreset({
+    required this.id,
+    required this.name,
+    required this.baseUrl,
+    required this.defaultModel,
+    required this.popularModels,
+    required this.keyUrl,
+    required this.keyHint,
+    required this.description,
+  });
+}
+
 class AiService {
-  static const String _defaultBaseUrl = 'https://api.deepseek.com';
-  static const String _defaultModel = 'deepseek-chat';
+  static const List<AiProviderPreset> providers = [
+    AiProviderPreset(
+      id: 'groq',
+      name: 'Groq (Ultra-Fast & Free)',
+      baseUrl: 'https://api.groq.com/openai/v1',
+      defaultModel: 'llama-3.3-70b-versatile',
+      popularModels: [
+        'llama-3.3-70b-versatile',
+        'llama-3.1-8b-instant',
+        'mixtral-8x7b-32768',
+        'gemma2-9b-it',
+      ],
+      keyUrl: 'https://console.groq.com/keys',
+      keyHint: 'gsk_...',
+      description: 'Lightning-fast responses with free tier access.',
+    ),
+    AiProviderPreset(
+      id: 'gemini',
+      name: 'Google Gemini (Free)',
+      baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+      defaultModel: 'gemini-1.5-flash',
+      popularModels: [
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+      ],
+      keyUrl: 'https://aistudio.google.com/app/apikey',
+      keyHint: 'AIzaSy...',
+      description: 'Generous free daily requests via Google AI Studio.',
+    ),
+    AiProviderPreset(
+      id: 'openrouter',
+      name: 'OpenRouter (Free Models)',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      defaultModel: 'google/gemini-2.0-flash-exp:free',
+      popularModels: [
+        'google/gemini-2.0-flash-exp:free',
+        'meta-llama/llama-3.3-70b-instruct:free',
+        'meta-llama/llama-3.1-8b-instruct:free',
+        'deepseek/deepseek-r1:free',
+        'qwen/qwen-2.5-72b-instruct:free',
+      ],
+      keyUrl: 'https://openrouter.ai/keys',
+      keyHint: 'sk-or-v1-...',
+      description: 'Access 20+ completely free open-source models.',
+    ),
+    AiProviderPreset(
+      id: 'nvidia',
+      name: 'Nvidia NIM (Free Keys)',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      defaultModel: 'meta/llama-3.3-70b-instruct',
+      popularModels: [
+        'meta/llama-3.3-70b-instruct',
+        'mistralai/mistral-nemotron',
+        'nvidia/nemotron-3-nano-30b-a3b',
+      ],
+      keyUrl: 'https://build.nvidia.com/',
+      keyHint: 'nvapi-...',
+      description: '1,000 free inference credits on NVIDIA NIM.',
+    ),
+    AiProviderPreset(
+      id: 'custom',
+      name: 'Custom OpenAI-Compatible API',
+      baseUrl: '',
+      defaultModel: '',
+      popularModels: [],
+      keyUrl: '',
+      keyHint: 'sk-...',
+      description: 'Connect to LM Studio, Ollama, or any custom API.',
+    ),
+  ];
+
+  static const String _defaultBaseUrl = 'https://api.groq.com/openai/v1';
+  static const String _defaultModel = 'llama-3.3-70b-versatile';
   static const String nvidiaBaseUrl = 'https://integrate.api.nvidia.com/v1';
-  static const String nvidiaDefaultModel = 'z-ai/glm-5.2';
+  static const String nvidiaDefaultModel = 'meta/llama-3.3-70b-instruct';
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
-  /// The live /models response is intersected with this list so unavailable or
-  /// non-chat models never appear in AgentRio's NVIDIA model picker.
   static const List<String> nvidiaFreeChatModels = [
     'z-ai/glm-5.2',
     'nvidia/nemotron-3-nano-30b-a3b',

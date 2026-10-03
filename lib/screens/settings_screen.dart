@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../main.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../services/ai_service.dart';
 import '../services/shizuku_service.dart';
 import '../services/screen_automation_service.dart';
 import '../services/telegram_service.dart';
-import 'task_history_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import '../config/feature_flags.dart';
-import '../services/rio_tts_service.dart';
-import '../services/rio_trigger_service.dart';
 import '../widgets/rio_avatar_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -37,86 +33,73 @@ class _SettingsScreenState extends State<SettingsScreen>
   late TextEditingController _apiKeyController;
   late TextEditingController _baseUrlController;
   late TextEditingController _modelController;
-  late TextEditingController _telegramTokenController;
   bool _obscureKey = true;
-  bool _telegramEnabled = false;
-  double _maxSteps = 15;
-  bool _disableMaxSteps = false;
-  late TextEditingController _maxTokensController;
-  double _temperature = 1.0;
-  bool _useScreenCompression = true;
-  bool _useSystemPrompt = true;
+
+  String _selectedProviderId = 'groq';
+
   bool _floatingIconEnabled = false;
   int _floatingIconSize = 72;
   bool _isOverlayPermissionGranted = false;
-  RioAvatarType _selectedAvatar = RioAvatarType.rioOfficial;
+  bool _isAccessibilityActive = false;
+
+  bool _voiceFeedback = true;
+  bool _wakeWordEnabled = false;
 
   final Map<String, PermissionStatus> _permissions = {};
 
   @override
   void initState() {
     super.initState();
-    RioAvatarWidget.getSavedAvatar().then((type) {
-      if (mounted) setState(() => _selectedAvatar = type);
-    });
     WidgetsBinding.instance.addObserver(this);
+
     _apiKeyController = TextEditingController(text: widget.aiService.apiKey);
     _baseUrlController = TextEditingController(text: widget.aiService.baseUrl);
     _modelController = TextEditingController(text: widget.aiService.model);
-    _telegramTokenController = TextEditingController(
-      text: widget.telegramService.botToken,
-    );
-    _telegramEnabled = widget.telegramService.isEnabled;
-    _maxSteps = widget.aiService.rawMaxSteps.toDouble();
-    _disableMaxSteps = widget.aiService.disableMaxSteps;
-    _temperature = widget.aiService.temperature;
-    _maxTokensController = TextEditingController(
-      text: widget.aiService.maxTokens.toString(),
-    );
-    _useScreenCompression = widget.aiService.useScreenCompression;
-    _useSystemPrompt = widget.aiService.useSystemPrompt;
+
+    _detectProviderFromUrl();
 
     // Auto-save listeners
     _apiKeyController.addListener(_autoSave);
     _baseUrlController.addListener(_autoSave);
     _modelController.addListener(_autoSave);
-    _telegramTokenController.addListener(_autoSave);
-    _maxTokensController.addListener(_autoSave);
 
+    _loadPreferences();
     _checkPermissions();
-    if (FeatureFlags.floatingOverlayEnabled) {
-      _checkOverlayStatus();
+  }
+
+  void _detectProviderFromUrl() {
+    final url = widget.aiService.baseUrl.toLowerCase();
+    if (url.contains('api.groq.com')) {
+      _selectedProviderId = 'groq';
+    } else if (url.contains('generativelanguage.googleapis.com')) {
+      _selectedProviderId = 'gemini';
+    } else if (url.contains('openrouter.ai')) {
+      _selectedProviderId = 'openrouter';
+    } else if (url.contains('integrate.api.nvidia.com')) {
+      _selectedProviderId = 'nvidia';
+    } else {
+      _selectedProviderId = 'custom';
     }
   }
 
-  Future<void> _checkOverlayStatus() async {
+  Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedEnabled = prefs.getBool('rio_floating_enabled') ?? false;
-    final savedSize = prefs.getInt('rio_floating_size') ?? 72;
-    bool isActive = await FlutterOverlayWindow.isActive() ?? false;
-    bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+    final enabled = prefs.getBool('rio_floating_enabled') ?? false;
+    final size = prefs.getInt('rio_floating_size') ?? 72;
+    final voice = prefs.getBool('rio_voice_feedback') ?? true;
+    final wake = prefs.getBool('rio_wake_word') ?? false;
 
-    if (savedEnabled && isGranted && !isActive) {
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        overlayTitle: "Agent Rio",
-        overlayContent: "Floating Assistant",
-        flag: OverlayFlag.focusPointer,
-        alignment: OverlayAlignment.centerRight,
-        visibility: NotificationVisibility.visibilitySecret,
-        positionGravity: PositionGravity.auto,
-        startPosition: const OverlayPosition(0, 200),
-        width: savedSize,
-        height: savedSize,
-      );
-      isActive = true;
-    }
+    final overlayGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+    final accessActive = await widget.screenAutomationService.isAccessibilityServiceEnabled();
 
     if (mounted) {
       setState(() {
-        _floatingIconEnabled = savedEnabled;
-        _floatingIconSize = savedSize;
-        _isOverlayPermissionGranted = isGranted;
+        _floatingIconEnabled = enabled;
+        _floatingIconSize = size;
+        _voiceFeedback = voice;
+        _wakeWordEnabled = wake;
+        _isOverlayPermissionGranted = overlayGranted;
+        _isAccessibilityActive = accessActive;
       });
     }
   }
@@ -127,13 +110,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     _apiKeyController.removeListener(_autoSave);
     _baseUrlController.removeListener(_autoSave);
     _modelController.removeListener(_autoSave);
-    _telegramTokenController.removeListener(_autoSave);
-    _maxTokensController.removeListener(_autoSave);
     _apiKeyController.dispose();
     _baseUrlController.dispose();
     _modelController.dispose();
-    _telegramTokenController.dispose();
-    _maxTokensController.dispose();
     super.dispose();
   }
 
@@ -141,37 +120,30 @@ class _SettingsScreenState extends State<SettingsScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkPermissions();
-      if (FeatureFlags.floatingOverlayEnabled) {
-        _checkOverlayStatus();
-      }
+      _loadPreferences();
     }
   }
 
   Future<void> _checkPermissions() async {
+    final overlayGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+    final accessActive = await widget.screenAutomationService.isAccessibilityServiceEnabled();
+
     final perms = {
       'Microphone': Permission.microphone,
       'Contacts': Permission.contacts,
       'Phone': Permission.phone,
-      'SMS': Permission.sms,
-      'Notifications': Permission.notification,
     };
 
     for (final entry in perms.entries) {
       _permissions[entry.key] = await entry.value.status;
     }
-    final overlayGranted = FeatureFlags.floatingOverlayEnabled
-        ? await FlutterOverlayWindow.isPermissionGranted()
-        : false;
+
     if (mounted) {
       setState(() {
         _isOverlayPermissionGranted = overlayGranted;
+        _isAccessibilityActive = accessActive;
       });
     }
-  }
-
-  Future<void> _requestPermission(String name, Permission permission) async {
-    final status = await permission.request();
-    setState(() => _permissions[name] = status);
   }
 
   void _autoSave() {
@@ -180,78 +152,83 @@ class _SettingsScreenState extends State<SettingsScreen>
       baseUrl: _baseUrlController.text.trim(),
       model: _modelController.text.trim(),
     );
+  }
 
-    widget.telegramService.saveSettings(
-      botToken: _telegramTokenController.text.trim(),
-      isEnabled: _telegramEnabled,
-    );
-
-    widget.aiService.saveMaxSteps(_maxSteps.toInt());
-    widget.aiService.saveDisableMaxSteps(_disableMaxSteps);
-    widget.aiService.saveAdvancedSettings(
-      temperature: _temperature,
-      maxTokens: int.tryParse(_maxTokensController.text) ?? 1024,
-      useScreenCompression: _useScreenCompression,
-      useSystemPrompt: _useSystemPrompt,
-    );
+  void _selectProvider(AiProviderPreset provider) {
+    setState(() {
+      _selectedProviderId = provider.id;
+      if (provider.baseUrl.isNotEmpty) {
+        _baseUrlController.text = provider.baseUrl;
+      }
+      if (provider.defaultModel.isNotEmpty) {
+        _modelController.text = provider.defaultModel;
+      }
+    });
+    _autoSave();
   }
 
   Future<void> _fetchModels() async {
     final baseUrl = _baseUrlController.text.trim();
     final apiKey = _apiKeyController.text.trim();
 
-    if (baseUrl.isEmpty || apiKey.isEmpty) {
+    if (baseUrl.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter Base URL and API Key first.'),
-        ),
+        const SnackBar(content: Text('Please select a provider first.')),
       );
       return;
     }
 
-    // Show loading
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(
+        child: CircularProgressIndicator(color: Color(0xFF6366F1)),
+      ),
     );
 
     final models = await widget.aiService.fetchAvailableModels(baseUrl, apiKey);
-
-    // Hide loading
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    Navigator.pop(context);
 
     if (models.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No models found or error fetching models.'),
-          ),
-        );
-      }
-      return;
-    }
-
-    if (mounted) {
-      final isNvidia = AiService.isNvidiaBaseUrl(baseUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not fetch models. Verify your API key.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } else {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            isNvidia ? 'Select a Free NVIDIA Model' : 'Select a Model',
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF131B2E),
+          title: const Text(
+            'Select Model',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           content: SizedBox(
             width: double.maxFinite,
-            height: 300,
+            height: 350,
             child: ListView.builder(
               itemCount: models.length,
               itemBuilder: (context, index) {
+                final m = models[index];
+                final isSelected = _modelController.text.trim() == m;
                 return ListTile(
-                  title: Text(models[index]),
+                  title: Text(
+                    m,
+                    style: TextStyle(
+                      color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 13,
+                    ),
+                  ),
+                  trailing: isSelected
+                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 18)
+                      : null,
                   onTap: () {
-                    setState(() {
-                      _modelController.text = models[index];
-                    });
+                    setState(() => _modelController.text = m);
+                    _autoSave();
                     Navigator.pop(context);
                   },
                 );
@@ -261,7 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Close', style: TextStyle(color: Color(0xFF94A3B8))),
             ),
           ],
         ),
@@ -269,67 +246,820 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  Widget _buildSettingsCard({
-    required IconData icon,
-    required String title,
-    String? subtitle,
-    required List<Widget> children,
-    required bool isDark,
-  }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Future<void> _toggleFloatingIcon(bool val) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (val) {
+      bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+      await prefs.setBool('rio_floating_enabled', true);
+      setState(() {
+        _floatingIconEnabled = true;
+      });
+
+      if (!isGranted) {
+        if (mounted) {
+          _showPermissionDialog();
+        }
+        await FlutterOverlayWindow.requestPermission();
+      } else {
+        if (!await FlutterOverlayWindow.isActive()) {
+          await FlutterOverlayWindow.showOverlay(
+            enableDrag: true,
+            overlayTitle: "Agent Rio",
+            overlayContent: "Floating Assistant",
+            flag: OverlayFlag.focusPointer,
+            alignment: OverlayAlignment.centerRight,
+            visibility: NotificationVisibility.visibilitySecret,
+            positionGravity: PositionGravity.auto,
+            startPosition: const OverlayPosition(0, 200),
+            width: _floatingIconSize,
+            height: _floatingIconSize,
+          );
+        }
+      }
+    } else {
+      await prefs.setBool('rio_floating_enabled', false);
+      setState(() => _floatingIconEnabled = false);
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    }
+  }
+
+  void _showPermissionDialog() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: const Color(0xFF131B2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: Theme.of(context).primaryColor,
-                    size: 20,
-                  ),
+            Icon(Icons.layers_rounded, color: Color(0xFF38BDF8), size: 24),
+            SizedBox(width: 10),
+            Text('Overlay Permission', style: TextStyle(color: Colors.white, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'To show the floating Agent Rio avatar over other apps, Android requires "Display over other apps" permission.\n\nPlease toggle it ON in the next screen.',
+          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6366F1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await FlutterOverlayWindow.requestPermission();
+            },
+            child: const Text('Open Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const isDark = true;
+    final currentPreset = AiService.providers.firstWhere(
+      (p) => p.id == _selectedProviderId,
+      orElse: () => AiService.providers.first,
+    );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF070A13),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF0B0F19),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF38BDF8)],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.4),
+                    blurRadius: 10,
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.smart_toy_rounded, size: 16, color: Colors.white),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'Agent Rio Settings',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: ListView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        children: [
+          // 1. AI BRAIN & PROVIDER CARD
+          _buildCard(
+            icon: Icons.psychology_rounded,
+            iconColor: const Color(0xFF38BDF8),
+            title: 'AI Brain Provider',
+            subtitle: 'Choose your preferred AI service and model',
+            children: [
+              const Text(
+                'SELECT PROVIDER',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Provider Chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AiService.providers.map((p) {
+                  final isSelected = p.id == _selectedProviderId;
+                  return InkWell(
+                    onTap: () => _selectProvider(p),
+                    borderRadius: BorderRadius.circular(14),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF131B2E),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF243049),
+                          width: 1.2,
                         ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF6366F1).withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark
-                                ? const Color(0xFF94A3B8)
-                                : const Color(0xFF475569),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            p.id == 'groq'
+                                ? Icons.bolt_rounded
+                                : p.id == 'gemini'
+                                    ? Icons.auto_awesome_rounded
+                                    : p.id == 'openrouter'
+                                        ? Icons.hub_rounded
+                                        : p.id == 'nvidia'
+                                            ? Icons.memory_rounded
+                                            : Icons.tune_rounded,
+                            size: 15,
+                            color: isSelected ? Colors.white : const Color(0xFF38BDF8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            p.name.split(' ').first,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              color: isSelected ? Colors.white : const Color(0xFFF1F5F9),
+                            ),
+                          ),
+                          if (p.id != 'custom') ...[
+                            const SizedBox(width: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.white.withOpacity(0.2) : const Color(0xFF1E293B),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'FREE',
+                                style: TextStyle(
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  color: isSelected ? Colors.white : const Color(0xFF10B981),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Provider description and Get Free Key link
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F172A),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF1E293B)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF38BDF8)),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        currentPreset.description,
+                        style: const TextStyle(fontSize: 11.5, color: Color(0xFF94A3B8)),
+                      ),
+                    ),
+                    if (currentPreset.keyUrl.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: () => launchUrl(
+                          Uri.parse(currentPreset.keyUrl),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366F1).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF6366F1).withOpacity(0.4)),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Get Key',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF818CF8),
+                                ),
+                              ),
+                              SizedBox(width: 3),
+                              Icon(Icons.open_in_new_rounded, size: 11, color: Color(0xFF818CF8)),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // API Key Field
+              TextField(
+                controller: _apiKeyController,
+                obscureText: _obscureKey,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: _buildInputDecoration(
+                  labelText: 'API Key (${currentPreset.name.split(' ').first})',
+                  hintText: currentPreset.keyHint,
+                  prefixIcon: const Icon(Icons.key_rounded, size: 18, color: Color(0xFF6366F1)),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.content_paste_rounded, size: 18, color: Color(0xFF38BDF8)),
+                        tooltip: 'Paste from clipboard',
+                        onPressed: () async {
+                          final data = await Clipboard.getData('text/plain');
+                          if (data?.text != null) {
+                            setState(() => _apiKeyController.text = data!.text!.trim());
+                            _autoSave();
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _obscureKey ? Icons.visibility_off : Icons.visibility,
+                          size: 18,
+                          color: const Color(0xFF64748B),
+                        ),
+                        onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                      ),
                     ],
                   ),
                 ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Model Field & Fetch button
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _modelController,
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                      decoration: _buildInputDecoration(
+                        labelText: 'Model Name',
+                        hintText: currentPreset.defaultModel,
+                        prefixIcon: const Icon(Icons.smart_toy_outlined, size: 18, color: Color(0xFF38BDF8)),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton.icon(
+                    onPressed: _fetchModels,
+                    icon: const Icon(Icons.list_rounded, size: 16, color: Colors.white),
+                    label: const Text('Browse', style: TextStyle(color: Colors.white, fontSize: 12)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E293B),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: Color(0xFF334155)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              if (currentPreset.popularModels.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text(
+                  'POPULAR MODELS:',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF64748B),
+                    letterSpacing: 1.0,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: currentPreset.popularModels.map((m) {
+                    final isSel = _modelController.text.trim() == m;
+                    return InkWell(
+                      onTap: () {
+                        setState(() => _modelController.text = m);
+                        _autoSave();
+                      },
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isSel ? const Color(0xFF6366F1).withOpacity(0.25) : const Color(0xFF0F172A),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: isSel ? const Color(0xFF818CF8) : const Color(0xFF1E293B),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          m.split('/').last,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            color: isSel ? const Color(0xFF38BDF8) : const Color(0xFF94A3B8),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
               ],
-            ),
-            const SizedBox(height: 20),
-            ...children,
-          ],
+
+              // Custom Base URL field (only shown for Custom API)
+              if (_selectedProviderId == 'custom') ...[
+                const SizedBox(height: 14),
+                TextField(
+                  controller: _baseUrlController,
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  decoration: _buildInputDecoration(
+                    labelText: 'API Base URL',
+                    hintText: 'https://api.openai.com/v1',
+                    prefixIcon: const Icon(Icons.link_rounded, size: 18, color: Color(0xFF38BDF8)),
+                  ),
+                ),
+              ],
+            ],
+          ),
+
+          // 2. FLOATING AGENT RIO COMPANION CARD
+          _buildCard(
+            icon: Icons.picture_in_picture_alt_rounded,
+            iconColor: const Color(0xFF6366F1),
+            title: 'Floating Rio Avatar',
+            subtitle: 'Always-on screen assistant over other apps',
+            children: [
+              // Status Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: _floatingIconEnabled && _isOverlayPermissionGranted
+                      ? const Color(0xFF065F46).withOpacity(0.3)
+                      : const Color(0xFF1E293B),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: _floatingIconEnabled && _isOverlayPermissionGranted
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF334155),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _floatingIconEnabled && _isOverlayPermissionGranted
+                            ? const Color(0xFF10B981)
+                            : (_floatingIconEnabled ? Colors.orangeAccent : const Color(0xFF64748B)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _floatingIconEnabled && _isOverlayPermissionGranted
+                          ? 'Floating Avatar is Active on Screen'
+                          : (_floatingIconEnabled
+                              ? 'Action Required: Grant Overlay Permission'
+                              : 'Floating Avatar is Disabled'),
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: _floatingIconEnabled && _isOverlayPermissionGranted
+                            ? const Color(0xFF34D399)
+                            : (_floatingIconEnabled ? Colors.orangeAccent : const Color(0xFF94A3B8)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              SwitchListTile(
+                title: const Text(
+                  'Enable Floating Avatar',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: const Text(
+                  'Keeps Rio accessible across all your apps and homescreen',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                ),
+                value: _floatingIconEnabled,
+                activeColor: const Color(0xFF6366F1),
+                contentPadding: EdgeInsets.zero,
+                onChanged: _toggleFloatingIcon,
+              ),
+
+              if (!_isOverlayPermissionGranted) ...[
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await FlutterOverlayWindow.requestPermission();
+                    await _checkPermissions();
+                  },
+                  icon: const Icon(Icons.security_rounded, size: 16, color: Colors.white),
+                  label: const Text(
+                    'Grant "Display Over Other Apps" Permission',
+                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6366F1),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+
+              const Divider(color: Color(0xFF1E293B), height: 24),
+
+              // Size Control
+              Row(
+                children: [
+                  const Text(
+                    'Avatar Size:',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${_floatingIconSize}dp',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF38BDF8),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildSizeOption(56, 'Small (56dp)'),
+                  _buildSizeOption(72, 'Medium (72dp)'),
+                  _buildSizeOption(88, 'Large (88dp)'),
+                  _buildSizeOption(104, 'X-Large (104dp)'),
+                ],
+              ),
+            ],
+          ),
+
+          // 3. SCREEN CONTROL (ACCESSIBILITY) CARD
+          _buildCard(
+            icon: Icons.touch_app_rounded,
+            iconColor: const Color(0xFF10B981),
+            title: 'Screen Automation Control',
+            subtitle: 'Autonomous clicking, scrolling, and typing',
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _isAccessibilityActive
+                      ? const Color(0xFF065F46).withOpacity(0.3)
+                      : const Color(0xFF451A03).withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _isAccessibilityActive ? const Color(0xFF10B981) : Colors.orangeAccent,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _isAccessibilityActive ? Icons.check_circle_rounded : Icons.warning_rounded,
+                      color: _isAccessibilityActive ? const Color(0xFF10B981) : Colors.orangeAccent,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _isAccessibilityActive
+                                ? 'Agent Rio Screen Control is ACTIVE'
+                                : 'Screen Control is DISABLED',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                              color: _isAccessibilityActive ? const Color(0xFF34D399) : Colors.orangeAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Required for multi-step tasks across apps.',
+                            style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              ElevatedButton.icon(
+                onPressed: () async {
+                  await widget.screenAutomationService.openAccessibilitySettings();
+                },
+                icon: const Icon(Icons.settings_accessibility_rounded, size: 18, color: Colors.white),
+                label: Text(
+                  _isAccessibilityActive ? 'Manage Accessibility Service' : 'Enable Screen Control in Settings',
+                  style: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isAccessibilityActive ? const Color(0xFF1E293B) : const Color(0xFF6366F1),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: _isAccessibilityActive ? const Color(0xFF334155) : const Color(0xFF818CF8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // 4. VOICE & WAKE WORD CARD
+          _buildCard(
+            icon: Icons.mic_rounded,
+            iconColor: const Color(0xFFF59E0B),
+            title: 'Voice & Wake Word',
+            subtitle: 'Spoken feedback and "Hey Rio" detection',
+            children: [
+              SwitchListTile(
+                title: const Text(
+                  'Voice Feedback (TTS)',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
+                ),
+                subtitle: const Text(
+                  'Speak responses aloud automatically',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                ),
+                value: _voiceFeedback,
+                activeColor: const Color(0xFF6366F1),
+                contentPadding: EdgeInsets.zero,
+                onChanged: (val) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('rio_voice_feedback', val);
+                  setState(() => _voiceFeedback = val);
+                },
+              ),
+              SwitchListTile(
+                title: const Text(
+                  'Wake Word ("Hey Rio")',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13.5),
+                ),
+                subtitle: const Text(
+                  'Hands-free listening trigger',
+                  style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5),
+                ),
+                value: _wakeWordEnabled,
+                activeColor: const Color(0xFF6366F1),
+                contentPadding: EdgeInsets.zero,
+                onChanged: (val) async {
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('rio_wake_word', val);
+                  setState(() => _wakeWordEnabled = val);
+                },
+              ),
+            ],
+          ),
+
+          // 5. ABOUT AGENT RIO CARD
+          _buildCard(
+            icon: Icons.info_outline_rounded,
+            iconColor: const Color(0xFF818CF8),
+            title: 'About Agent Rio',
+            subtitle: 'Autonomous AI Companion & Screen Automation',
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.code_rounded, color: Color(0xFF38BDF8), size: 18),
+                ),
+                title: const Text('Agent Rio Repository', style: TextStyle(color: Colors.white, fontSize: 13)),
+                subtitle: const Text('github.com/Manik51/Agent-Rio', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5)),
+                trailing: const Icon(Icons.open_in_new_rounded, color: Color(0xFF64748B), size: 16),
+                onTap: () => launchUrl(
+                  Uri.parse('https://github.com/Manik51/Agent-Rio'),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E293B),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.download_rounded, color: Color(0xFF10B981), size: 18),
+                ),
+                title: const Text('Latest Releases & Updates', style: TextStyle(color: Colors.white, fontSize: 13)),
+                subtitle: const Text('Download new APK builds', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 11.5)),
+                trailing: const Icon(Icons.open_in_new_rounded, color: Color(0xFF64748B), size: 16),
+                onTap: () => launchUrl(
+                  Uri.parse('https://github.com/Manik51/Agent-Rio/releases'),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSizeOption(int sz, String label) {
+    final isSelected = _floatingIconSize == sz;
+    return InkWell(
+      onTap: () async {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('rio_floating_size', sz);
+        setState(() => _floatingIconSize = sz);
+        if (await FlutterOverlayWindow.isActive()) {
+          await FlutterOverlayWindow.resizeOverlay(sz, sz, true);
+          try {
+            await FlutterOverlayWindow.shareData('RESIZE|$sz');
+          } catch (_) {}
+        }
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF6366F1) : const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF818CF8) : const Color(0xFF1E293B),
+            width: 1,
+          ),
         ),
+        child: Text(
+          '${sz}dp',
+          style: TextStyle(
+            fontSize: 11.5,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? Colors.white : const Color(0xFF94A3B8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B0F19),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF1E293B), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...children,
+        ],
       ),
     );
   }
@@ -340,993 +1070,29 @@ class _SettingsScreenState extends State<SettingsScreen>
     Widget? prefixIcon,
     Widget? suffixIcon,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InputDecoration(
       labelText: labelText,
+      labelStyle: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12.5),
       hintText: hintText,
+      hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 12),
       prefixIcon: prefixIcon,
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-      labelStyle: TextStyle(
-        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-      hintStyle: TextStyle(
-        color: isDark ? const Color(0xFF475569) : const Color(0xFF94A3B8),
-        fontSize: 13,
-      ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      fillColor: const Color(0xFF0F172A),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF1E293B)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF1E293B)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary,
-          width: 1.8,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 1.5),
       ),
-      floatingLabelBehavior: FloatingLabelBehavior.auto,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Settings',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
-        children: [
-          // 1. Appearance Card
-          _buildSettingsCard(
-            icon: Icons.palette_outlined,
-            title: 'Appearance',
-            subtitle: 'Choose your preferred color theme',
-            isDark: isDark,
-            children: [
-              ValueListenableBuilder<ThemeMode>(
-                valueListenable: themeNotifier,
-                builder: (context, currentMode, _) {
-                  return SizedBox(
-                    width: double.infinity,
-                    child: SegmentedButton<ThemeMode>(
-                      style: SegmentedButton.styleFrom(
-                        selectedBackgroundColor: Theme.of(
-                          context,
-                        ).colorScheme.primary,
-                        selectedForegroundColor: Colors.white,
-                        backgroundColor: isDark
-                            ? const Color(0xFF1E293B)
-                            : Colors.white,
-                        foregroundColor: isDark ? Colors.white : Colors.black87,
-                        side: BorderSide(
-                          color: isDark
-                              ? const Color(0xFF334155)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      segments: [
-                        ButtonSegment(
-                          value: ThemeMode.system,
-                          label: const Text(
-                            'System',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          icon: const Icon(Icons.brightness_auto, size: 16),
-                        ),
-                        ButtonSegment(
-                          value: ThemeMode.light,
-                          label: const Text(
-                            'Light',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          icon: const Icon(Icons.light_mode, size: 16),
-                        ),
-                        ButtonSegment(
-                          value: ThemeMode.dark,
-                          label: const Text(
-                            'Dark',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                          icon: const Icon(Icons.dark_mode, size: 16),
-                        ),
-                      ],
-                      selected: {currentMode},
-                      onSelectionChanged: (Set<ThemeMode> newSelection) async {
-                        final mode = newSelection.first;
-                        themeNotifier.value = mode;
-                        final prefs = await SharedPreferences.getInstance();
-                        await prefs.setString('themeMode', mode.name);
-                      },
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          // 2. AI Engine Config Card
-          _buildSettingsCard(
-            icon: Icons.psychology_outlined,
-            title: 'AI Engine Configuration',
-            subtitle: 'Supports any OpenAI-compatible API endpoint',
-            isDark: isDark,
-            children: [
-              TextField(
-                controller: _apiKeyController,
-                decoration: _buildInputDecoration(
-                  labelText: 'API Key',
-                  hintText: 'sk-...',
-                  prefixIcon: const Icon(Icons.key_rounded, size: 18),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureKey ? Icons.visibility_off : Icons.visibility,
-                      size: 18,
-                    ),
-                    onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                  ),
-                ),
-                obscureText: _obscureKey,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _baseUrlController,
-                decoration: _buildInputDecoration(
-                  labelText: 'API Base URL',
-                  hintText: 'https://api.deepseek.com',
-                  prefixIcon: const Icon(Icons.dns_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  ActionChip(
-                    label: const Text(
-                      'Local Server',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    tooltip: 'For local Llama.cpp or LM Studio',
-                    onPressed: () =>
-                        _baseUrlController.text = 'http://192.168.1.X:8080/v1',
-                  ),
-                  ActionChip(
-                    label: const Text(
-                      'Ollama Cloud',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () {
-                      _baseUrlController.text = 'https://ollama.com/v1';
-                      _modelController.text = 'gemma3:4b';
-                    },
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.hub_rounded, size: 16),
-                    label: const Text(
-                      'OpenRouter',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: () {
-                      _baseUrlController.text = 'https://openrouter.ai/api/v1';
-                      _modelController.text = 'google/gemini-2.0-flash-001';
-                    },
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.auto_awesome, size: 16),
-                    label: const Text(
-                      'Gemini',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                    tooltip: 'Google Gemini direct API',
-                    onPressed: () {
-                      _baseUrlController.text = 'https://generativelanguage.googleapis.com/v1beta/openai';
-                      _modelController.text = 'gemini-2.0-flash';
-                    },
-                  ),
-                  ActionChip(
-                    label: const Text(
-                      'DeepSeek',
-                      style: TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () {
-                      _baseUrlController.text = 'https://api.deepseek.com';
-                      _modelController.text = 'deepseek-chat';
-                    },
-                  ),
-                  ActionChip(
-                    label: const Text('Groq', style: TextStyle(fontSize: 11)),
-                    onPressed: () => _baseUrlController.text =
-                        'https://api.groq.com/openai/v1',
-                  ),
-                  ActionChip(
-                    avatar: const Icon(Icons.memory_rounded, size: 16),
-                    label: const Text('NVIDIA', style: TextStyle(fontSize: 11)),
-                    tooltip: 'NVIDIA NIM free endpoints',
-                    onPressed: () {
-                      _baseUrlController.text = AiService.nvidiaBaseUrl;
-                      _modelController.text = AiService.nvidiaDefaultModel;
-                    },
-                  ),
-                  ActionChip(
-                    label: const Text('Custom', style: TextStyle(fontSize: 11)),
-                    tooltip: 'Clear fields',
-                    onPressed: () {
-                      _baseUrlController.clear();
-                      _apiKeyController.clear();
-                      _modelController.clear();
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _modelController,
-                      decoration: _buildInputDecoration(
-                        labelText: 'Model',
-                        hintText: 'deepseek-chat',
-                        prefixIcon: const Icon(
-                          Icons.smart_toy_rounded,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _fetchModels,
-                    icon: const Icon(
-                      Icons.cloud_download,
-                      size: 18,
-                      color: Colors.white,
-                    ),
-                    label: const Text(
-                      'Fetch',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.primary,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          // 3. Parameters & Tuning Card
-          _buildSettingsCard(
-            icon: Icons.tune_outlined,
-            title: 'Tuning & Boundaries',
-            subtitle: 'Configure LLM agent parameters',
-            isDark: isDark,
-            children: [
-              SwitchListTile(
-                title: const Text('Disable Maximum Steps'),
-                subtitle: const Text(
-                  '⚠️ Can cause infinite loops.',
-                  style: TextStyle(color: Colors.orange, fontSize: 12),
-                ),
-                value: _disableMaxSteps,
-                onChanged: (bool value) {
-                  setState(() {
-                    _disableMaxSteps = value;
-                  });
-                  _autoSave();
-                },
-                contentPadding: EdgeInsets.zero,
-              ),
-              if (!_disableMaxSteps) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Maximum Steps Per Task: ${_maxSteps.toInt()}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13,
-                  ),
-                ),
-                Slider(
-                  value: _maxSteps,
-                  min: 5,
-                  max: 50,
-                  divisions: 45,
-                  label: _maxSteps.toInt().toString(),
-                  onChanged: (value) {
-                    setState(() {
-                      _maxSteps = value;
-                    });
-                  },
-                  onChangeEnd: (value) {
-                    _autoSave();
-                  },
-                ),
-              ],
-              const SizedBox(height: 12),
-              TextField(
-                controller: _maxTokensController,
-                keyboardType: TextInputType.number,
-                decoration: _buildInputDecoration(
-                  labelText: 'Context Limit (Max Tokens)',
-                  hintText: '1024',
-                  prefixIcon: const Icon(Icons.token_rounded, size: 18),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Temperature: ${_temperature.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-              ),
-              Slider(
-                value: _temperature,
-                min: 0.0,
-                max: 2.0,
-                divisions: 20,
-                label: _temperature.toStringAsFixed(2),
-                onChanged: (value) {
-                  setState(() {
-                    _temperature = value;
-                  });
-                },
-                onChangeEnd: (value) {
-                  _autoSave();
-                },
-              ),
-            ],
-          ),
-
-          // 4. Behavior & Extensions Card
-          _buildSettingsCard(
-            icon: Icons.extension_outlined,
-            title: 'Behavior & Extensions',
-            subtitle: 'Additional feature flags and overlay options',
-            isDark: isDark,
-            children: [
-              SwitchListTile(
-                title: const Text('Use Screen Compression'),
-                subtitle: const Text(
-                  'Removes duplicate elements to save tokens',
-                ),
-                value: _useScreenCompression,
-                onChanged: (bool value) {
-                  setState(() {
-                    _useScreenCompression = value;
-                  });
-                  _autoSave();
-                },
-                contentPadding: EdgeInsets.zero,
-              ),
-              SwitchListTile(
-                title: const Text('Send System Prompt'),
-                subtitle: const Text('Turn off for custom LoRA fine-tunes'),
-                value: _useSystemPrompt,
-                onChanged: (bool value) {
-                  setState(() {
-                    _useSystemPrompt = value;
-                  });
-                  _autoSave();
-                },
-                contentPadding: EdgeInsets.zero,
-              ),
-              if (FeatureFlags.floatingOverlayEnabled) ...[
-                SwitchListTile(
-                  title: const Text('Enable Floating Agent Icon'),
-                  subtitle: const Text('Assign tasks without opening the app'),
-                  value: _floatingIconEnabled,
-                  onChanged: (val) async {
-                    final prefs = await SharedPreferences.getInstance();
-                    if (val) {
-                      bool isGranted =
-                          await FlutterOverlayWindow.isPermissionGranted() ??
-                              false;
-                      if (!isGranted) {
-                        await FlutterOverlayWindow.requestPermission();
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Please allow "Display over other apps" for Agent Rio.',
-                              ),
-                              backgroundColor: Color(0xFF6366F1),
-                            ),
-                          );
-                        }
-                      }
-                      await prefs.setBool('rio_floating_enabled', true);
-                      setState(() => _floatingIconEnabled = true);
-                      isGranted =
-                          await FlutterOverlayWindow.isPermissionGranted() ??
-                              false;
-                      if (isGranted) {
-                        if (!await FlutterOverlayWindow.isActive()) {
-                          await FlutterOverlayWindow.showOverlay(
-                            enableDrag: true,
-                            overlayTitle: "Agent Rio",
-                            overlayContent: "Floating Assistant",
-                            flag: OverlayFlag.focusPointer,
-                            alignment: OverlayAlignment.centerRight,
-                            visibility: NotificationVisibility.visibilitySecret,
-                            positionGravity: PositionGravity.auto,
-                            startPosition: const OverlayPosition(0, 200),
-                            width: _floatingIconSize,
-                            height: _floatingIconSize,
-                          );
-                        }
-                      }
-                    } else {
-                      await prefs.setBool('rio_floating_enabled', false);
-                      setState(() => _floatingIconEnabled = false);
-                      if (await FlutterOverlayWindow.isActive()) {
-                        await FlutterOverlayWindow.closeOverlay();
-                      }
-                    }
-                  },
-                  contentPadding: EdgeInsets.zero,
-                ),
-                if (_floatingIconEnabled) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Text(
-                        'Floating Avatar Size',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${_floatingIconSize}dp',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF6366F1),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: [56, 72, 88, 104].map((sz) {
-                      final isSelected = _floatingIconSize == sz;
-                      final label = sz == 56
-                          ? 'Small'
-                          : sz == 72
-                              ? 'Medium'
-                              : sz == 88
-                                  ? 'Large'
-                                  : 'X-Large';
-                      return ChoiceChip(
-                        label: Text('$label (${sz}dp)'),
-                        selected: isSelected,
-                        selectedColor: const Color(0xFF6366F1),
-                        labelStyle: TextStyle(
-                          fontSize: 11.5,
-                          color: isSelected
-                              ? Colors.white
-                              : (isDark ? Colors.white70 : Colors.black87),
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                        onSelected: (selected) async {
-                          if (selected) {
-                            final prefs =
-                                await SharedPreferences.getInstance();
-                            await prefs.setInt('rio_floating_size', sz);
-                            setState(() => _floatingIconSize = sz);
-                            if (await FlutterOverlayWindow.isActive()) {
-                              await FlutterOverlayWindow.resizeOverlay(
-                                sz,
-                                sz,
-                                true,
-                              );
-                              try {
-                                await FlutterOverlayWindow.shareData(
-                                  'RESIZE|$sz',
-                                );
-                              } catch (_) {}
-                            }
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 6),
-                ],
-              ],
-            ],
-          ),
-
-          // 5. Telegram Remote Access Card
-          _buildSettingsCard(
-            icon: Icons.send_and_archive_outlined,
-            title: 'Telegram Remote Access',
-            subtitle: 'Control your agent remotely from anywhere',
-            isDark: isDark,
-            children: [
-              TextField(
-                controller: _telegramTokenController,
-                decoration: _buildInputDecoration(
-                  labelText: 'Telegram Bot Token',
-                  hintText: '123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11',
-                  prefixIcon: const Icon(Icons.send_rounded, size: 18),
-                ),
-              ),
-              SwitchListTile(
-                title: const Text('Enable Telegram Bot'),
-                subtitle: const Text('Allows remote control via Telegram chat'),
-                value: _telegramEnabled,
-                onChanged: (val) {
-                  setState(() => _telegramEnabled = val);
-                  _autoSave();
-                },
-                contentPadding: EdgeInsets.zero,
-              ),
-            ],
-          ),
-
-          // 6. Accessibility Screen Control Card
-          _buildSettingsCard(
-            icon: Icons.visibility_outlined,
-            title: 'Screen Control (Accessibility)',
-            subtitle: 'Required to read screen and perform automated clicks',
-            isDark: isDark,
-            children: [_buildAccessibilityCard()],
-          ),
-
-          // 7. Agent Rio Voice & Trigger Card
-          _buildSettingsCard(
-            icon: Icons.record_voice_over_outlined,
-            title: 'Agent Rio Voice & Trigger',
-            subtitle: 'Alexa voice synthesis, offline fallback, and wake-word',
-            isDark: isDark,
-            children: [_buildVoiceAndTriggerCard()],
-          ),
-
-          // 8. System Permissions Card
-          _buildSettingsCard(
-            icon: Icons.security_outlined,
-            title: 'App Permissions',
-            subtitle: 'Required for automation, microphone, and contacts',
-            isDark: isDark,
-            children: _buildPermissionTiles(),
-          ),
-
-          // 8. Task History Card
-          _buildSettingsCard(
-            icon: Icons.history_outlined,
-            title: 'Execution logs',
-            subtitle: 'View history of tasks and token analytics',
-            isDark: isDark,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('View Task History'),
-                subtitle: const Text(
-                  'Access complete trace of execution steps',
-                ),
-                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const TaskHistoryScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          // 9. About / Links Card
-          _buildSettingsCard(
-            icon: Icons.info_outline_rounded,
-            title: 'About Agent Rio',
-            subtitle: 'Autonomous AI Companion & Screen Automation',
-            isDark: isDark,
-            children: [
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Agent Rio Repository'),
-                subtitle: const Text('View source code on GitHub (Manik51/Agent-Rio)'),
-                leading: const Icon(Icons.code_rounded),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://github.com/Manik51/Agent-Rio'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Agent Rio Releases'),
-                subtitle: const Text('Download latest release APKs'),
-                leading: const Icon(
-                  Icons.auto_awesome_rounded,
-                  color: Color(0xFF6366F1),
-                ),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://github.com/Manik51/Agent-Rio/releases'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildPermissionTiles() {
-    final permissionMap = {
-      'Microphone': Permission.microphone,
-      'Contacts': Permission.contacts,
-      'Phone': Permission.phone,
-      'SMS': Permission.sms,
-      'Notifications': Permission.notification,
-    };
-
-    final icons = {
-      'Microphone': Icons.mic,
-      'Contacts': Icons.contacts,
-      'Phone': Icons.phone,
-      'SMS': Icons.sms,
-      'Notifications': Icons.notifications,
-    };
-
-    final list = permissionMap.entries.map((entry) {
-      final status = _permissions[entry.key];
-      final isGranted = status?.isGranted ?? false;
-
-      return ListTile(
-        leading: Icon(icons[entry.key]),
-        title: Text(entry.key),
-        trailing: isGranted
-            ? Icon(
-                Icons.check_circle,
-                color: Theme.of(context).colorScheme.primary,
-              )
-            : TextButton(
-                onPressed: () => _requestPermission(entry.key, entry.value),
-                child: const Text('Grant'),
-              ),
-        subtitle: Text(
-          isGranted
-              ? 'Granted'
-              : (status?.isDenied ?? true
-                    ? 'Not granted'
-                    : 'Denied permanently'),
-          style: TextStyle(
-            color: isGranted
-                ? Theme.of(context).colorScheme.primary
-                : Colors.orange,
-            fontSize: 12,
-          ),
-        ),
-      );
-    }).toList();
-
-    if (FeatureFlags.floatingOverlayEnabled) {
-      list.add(
-        ListTile(
-          leading: const Icon(Icons.layers),
-          title: const Text('Display Over Other Apps (Floating Bubble)'),
-          trailing: _isOverlayPermissionGranted
-              ? Icon(
-                  Icons.check_circle,
-                  color: Theme.of(context).colorScheme.primary,
-                )
-              : TextButton(
-                  onPressed: () async {
-                    await FlutterOverlayWindow.requestPermission();
-                    final granted =
-                        await FlutterOverlayWindow.isPermissionGranted();
-                    setState(() {
-                      _isOverlayPermissionGranted = granted;
-                    });
-                  },
-                  child: const Text('Grant'),
-                ),
-          subtitle: Text(
-            _isOverlayPermissionGranted ? 'Granted' : 'Not granted',
-            style: TextStyle(
-              color: _isOverlayPermissionGranted
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.orange,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      );
-    }
-
-    return list;
-  }
-
-  Widget _buildShizukuCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  widget.shizukuService.isAvailable
-                      ? Icons.link
-                      : Icons.link_off,
-                  color: widget.shizukuService.isAvailable
-                      ? Colors.green
-                      : Colors.grey,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  widget.shizukuService.isAvailable
-                      ? 'Shizuku is running'
-                      : 'Shizuku not detected',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: widget.shizukuService.isAvailable
-                        ? Colors.green
-                        : Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (!widget.shizukuService.isAvailable) ...[
-              const Text(
-                '1. Install Shizuku from Play Store\n'
-                '2. Open Shizuku and start it via Wireless Debugging\n'
-                '3. Come back here and tap "Check Again"',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: () async {
-                  await widget.shizukuService.checkAvailability();
-                  if (mounted) setState(() {});
-                },
-                child: const Text('Check Again'),
-              ),
-            ] else if (!widget.shizukuService.hasPermission) ...[
-              OutlinedButton(
-                onPressed: () async {
-                  await widget.shizukuService.requestPermission();
-                  if (mounted) setState(() {});
-                },
-                child: const Text('Grant Shizuku Permission'),
-              ),
-            ] else ...[
-              Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Permission granted — ADB commands available',
-                    style: TextStyle(color: Colors.green[700], fontSize: 13),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAccessibilityCard() {
-    return FutureBuilder<bool>(
-      future: widget.screenAutomationService.isServiceRunning(),
-      builder: (context, snapshot) {
-        final isRunning = snapshot.data ?? false;
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      isRunning ? Icons.visibility : Icons.visibility_off,
-                      color: isRunning ? Colors.green : Colors.grey,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isRunning
-                          ? 'Screen Control is active'
-                          : 'Screen Control is disabled',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: isRunning ? Colors.green : Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (!isRunning) ...[
-                  const Text(
-                    'Tap below to open Accessibility Settings, then find "Agent Rio Screen Control" and enable it.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await widget.screenAutomationService
-                          .openAccessibilitySettings();
-                    },
-                    icon: const Icon(Icons.settings),
-                    label: const Text('Open Accessibility Settings'),
-                  ),
-                ] else ...[
-                  Text(
-                    'Can read screen, tap, scroll, and type in other apps',
-                    style: TextStyle(color: Colors.green[700], fontSize: 13),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildVoiceAndTriggerCard() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.record_voice_over, color: Color(0xFF6366F1)),
-                const SizedBox(width: 8),
-                const Text(
-                  'Rio Voice & Trigger Settings',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Online voice uses Alexa/Neural synthesis with natural pitch. Offline automatically uses Android offline TTS.',
-              style: TextStyle(fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () async {
-                    await RioTtsService().speak(
-                      'Hello! I am Agent Rio, your voice-activated autonomous assistant.',
-                    );
-                  },
-                  icon: const Icon(Icons.volume_up, size: 18),
-                  label: const Text('Test Rio Voice'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4F46E5),
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    await Permission.ignoreBatteryOptimizations.request();
-                    if (mounted) setState(() {});
-                  },
-                  icon: const Icon(Icons.battery_charging_full, size: 18),
-                  label: const Text('Bypass Battery Optimization'),
-                ),
-              ],
-            ),
-            const Divider(height: 28),
-            Row(
-              children: [
-                const Icon(Icons.face_rounded, color: Color(0xFFEC4899), size: 20),
-                const SizedBox(width: 8),
-                const Text(
-                  'Choose Your Companion Avatar',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Select which character avatar floats on your screen:',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildAvatarChip(RioAvatarType.rioOfficial, '🤖 Rio (Official Rive)'),
-                _buildAvatarChip(RioAvatarType.pinkChill, '🎧 Pinky Chill'),
-                _buildAvatarChip(RioAvatarType.yellowNerd, '🤓 Professor Pip'),
-                _buildAvatarChip(RioAvatarType.blueBeret, '🎨 Blue Beret'),
-                _buildAvatarChip(RioAvatarType.greenFrog, '🐸 Froggy'),
-                _buildAvatarChip(RioAvatarType.heartCool, '💖 Hearty'),
-                _buildAvatarChip(RioAvatarType.gptDots, '⚪ GPT Dots'),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAvatarChip(RioAvatarType type, String label) {
-    final isSelected = _selectedAvatar == type;
-    return ChoiceChip(
-      selected: isSelected,
-      selectedColor: const Color(0xFF4F46E5).withOpacity(0.2),
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-        ),
-      ),
-      onSelected: (val) async {
-        if (val) {
-          await RioAvatarWidget.saveAvatar(type);
-          setState(() => _selectedAvatar = type);
-        }
-      },
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      isDense: true,
     );
   }
 }

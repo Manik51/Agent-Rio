@@ -142,50 +142,59 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
   SMITrigger? _wrongInput;
   SMITrigger? _jumpInput;
   bool _isLoaded = false;
+  bool _hasError = false;
 
   void _onRiveInit(Artboard artboard) {
-    final controller = StateMachineController.fromArtboard(
-      artboard,
-      'State Machine 1',
-    );
-    if (controller != null) {
-      artboard.addController(controller);
-      _typingInput = controller.findInput<bool>('typingBoolean') as SMIBool?;
-      _loadingInput = controller.findInput<bool>('loadingBoolean') as SMIBool?;
-      _correctInput = controller.findInput<bool>('correct') as SMITrigger?;
-      _wrongInput = controller.findInput<bool>('wrong') as SMITrigger?;
-      _jumpInput = controller.findInput<bool>('jump') as SMITrigger?;
-      if (mounted) setState(() => _isLoaded = true);
-      _syncState(widget.state);
+    try {
+      final controller = StateMachineController.fromArtboard(
+        artboard,
+        'State Machine 1',
+      ) ?? (artboard.stateMachines.isNotEmpty
+          ? StateMachineController.fromArtboard(artboard, artboard.stateMachines.first.name)
+          : null);
+      if (controller != null) {
+        artboard.addController(controller);
+        _typingInput = controller.findInput<bool>('typingBoolean') as SMIBool?;
+        _loadingInput = controller.findInput<bool>('loadingBoolean') as SMIBool?;
+        _correctInput = controller.findInput<bool>('correct') as SMITrigger?;
+        _wrongInput = controller.findInput<bool>('wrong') as SMITrigger?;
+        _jumpInput = controller.findInput<bool>('jump') as SMITrigger?;
+        if (mounted) setState(() => _isLoaded = true);
+        _syncState(widget.state);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _hasError = true);
     }
   }
 
   void _syncState(RioAvatarState state) {
     if (!_isLoaded) return;
-    switch (state) {
-      case RioAvatarState.listening:
-        _typingInput?.value = true;
-        _loadingInput?.value = false;
-        break;
-      case RioAvatarState.working:
-        _loadingInput?.value = true;
-        _typingInput?.value = false;
-        break;
-      case RioAvatarState.success:
-        _correctInput?.fire();
-        _loadingInput?.value = false;
-        _typingInput?.value = false;
-        break;
-      case RioAvatarState.error:
-        _wrongInput?.fire();
-        _loadingInput?.value = false;
-        _typingInput?.value = false;
-        break;
-      case RioAvatarState.idle:
-        _loadingInput?.value = false;
-        _typingInput?.value = false;
-        break;
-    }
+    try {
+      switch (state) {
+        case RioAvatarState.listening:
+          _typingInput?.value = true;
+          _loadingInput?.value = false;
+          break;
+        case RioAvatarState.working:
+          _loadingInput?.value = true;
+          _typingInput?.value = false;
+          break;
+        case RioAvatarState.success:
+          _correctInput?.fire();
+          _loadingInput?.value = false;
+          _typingInput?.value = false;
+          break;
+        case RioAvatarState.error:
+          _wrongInput?.fire();
+          _loadingInput?.value = false;
+          _typingInput?.value = false;
+          break;
+        case RioAvatarState.idle:
+          _loadingInput?.value = false;
+          _typingInput?.value = false;
+          break;
+      }
+    } catch (_) {}
   }
 
   @override
@@ -198,9 +207,30 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
 
   @override
   Widget build(BuildContext context) {
+    if (_hasError) {
+      // Graceful fallback to glowing AI Orb Mascot
+      return GestureDetector(
+        onTap: widget.onTap,
+        onDoubleTap: widget.onDoubleTap,
+        child: SizedBox(
+          width: widget.size,
+          height: widget.size,
+          child: CustomPaint(
+            painter: _CompanionAvatarPainter(
+              animationValue: 0.5,
+              state: widget.state,
+              type: RioAvatarType.pinkChill,
+            ),
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: () {
-        _jumpInput?.fire();
+        try {
+          _jumpInput?.fire();
+        } catch (_) {}
         widget.onTap();
       },
       onDoubleTap: widget.onDoubleTap,
@@ -210,14 +240,16 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
         child: RiveAnimation.asset(
           'assets/Rio.riv',
           fit: BoxFit.contain,
-          stateMachines: const ['State Machine 1'],
           onInit: _onRiveInit,
-          placeHolder: const Center(
+          onError: (e) {
+            if (mounted) setState(() => _hasError = true);
+          },
+          placeHolder: Center(
             child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
+              width: widget.size * 0.4,
+              height: widget.size * 0.4,
+              child: const CircularProgressIndicator(
+                strokeWidth: 2.5,
                 color: Color(0xFF6366F1),
               ),
             ),

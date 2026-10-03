@@ -94,25 +94,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _toggleFloatingRio(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     if (value) {
-      bool isGranted =
-          await FlutterOverlayWindow.isPermissionGranted() ?? false;
+      await prefs.setBool('rio_floating_enabled', true);
+      setState(() => _floatingRioEnabled = true);
+      bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
       if (!isGranted) {
-        await FlutterOverlayWindow.requestPermission();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Please allow "Display over other apps" for Agent Rio.',
+                'Please enable "Display over other apps" for Agent Rio.',
               ),
               backgroundColor: Color(0xFF6366F1),
+              duration: Duration(seconds: 3),
             ),
           );
         }
-      }
-      await prefs.setBool('rio_floating_enabled', true);
-      setState(() => _floatingRioEnabled = true);
-      isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
-      if (isGranted) {
+        await FlutterOverlayWindow.requestPermission();
+      } else {
         if (!await FlutterOverlayWindow.isActive()) {
           await FlutterOverlayWindow.showOverlay(
             enableDrag: true,

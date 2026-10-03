@@ -82,10 +82,14 @@ class FlutterOverlayWindow {
   /// it will open the overlay settings page and return `true` once the permission granted.
   static Future<bool?> requestPermission() async {
     try {
-      return await _channel.invokeMethod<bool?>('requestPermission');
+      return await _channel
+          .invokeMethod<bool?>('requestPermission')
+          .timeout(const Duration(seconds: 2), onTimeout: () => isPermissionGranted());
     } on PlatformException catch (error) {
-      log("Error requestPermession: $error");
-      rethrow;
+      log("Error requestPermission: $error");
+      return isPermissionGranted();
+    } catch (_) {
+      return isPermissionGranted();
     }
   }
 
