@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_message.dart';
 import '../services/ai_service.dart';
 import '../services/action_handler.dart';
 import '../services/voice_service.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/rio_avatar_widget.dart';
 import '../services/telegram_service.dart';
 import '../services/chat_history_service.dart';
 import '../services/notification_service.dart';
@@ -36,6 +38,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
   bool _isListening = false;
+  RioAvatarState _rioState = RioAvatarState.idle;
+
+  // Floating Rio companion state & size
+  bool _floatingRioEnabled = false;
+  int _floatingRioSize = 72;
 
   // Custom switch state: 'chat' or 'agent'
   String _mode = 'chat';
@@ -64,9 +71,81 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     await _voiceService.init();
     await _telegramService.init();
     await _actionHandler.shizuku.checkAvailability();
+    await _loadFloatingSettings();
 
     if (mounted) {
       setState(() {});
+    }
+  }
+
+  Future<void> _loadFloatingSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('rio_floating_enabled') ?? false;
+    final size = prefs.getInt('rio_floating_size') ?? 72;
+    if (mounted) {
+      setState(() {
+        _floatingRioEnabled = enabled;
+        _floatingRioSize = size;
+      });
+    }
+    await _updateOverlayState();
+  }
+
+  Future<void> _toggleFloatingRio(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      bool isGranted =
+          await FlutterOverlayWindow.isPermissionGranted() ?? false;
+      if (!isGranted) {
+        await FlutterOverlayWindow.requestPermission();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please allow "Display over other apps" for Agent Rio.',
+              ),
+              backgroundColor: Color(0xFF6366F1),
+            ),
+          );
+        }
+      }
+      await prefs.setBool('rio_floating_enabled', true);
+      setState(() => _floatingRioEnabled = true);
+      isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+      if (isGranted) {
+        if (!await FlutterOverlayWindow.isActive()) {
+          await FlutterOverlayWindow.showOverlay(
+            enableDrag: true,
+            overlayTitle: "Agent Rio",
+            overlayContent: "Floating Assistant",
+            flag: OverlayFlag.focusPointer,
+            alignment: OverlayAlignment.centerRight,
+            visibility: NotificationVisibility.visibilitySecret,
+            positionGravity: PositionGravity.auto,
+            startPosition: const OverlayPosition(0, 200),
+            width: _floatingRioSize,
+            height: _floatingRioSize,
+          );
+        }
+      }
+    } else {
+      await prefs.setBool('rio_floating_enabled', false);
+      setState(() => _floatingRioEnabled = false);
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    }
+  }
+
+  Future<void> _changeFloatingRioSize(int newSize) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('rio_floating_size', newSize);
+    setState(() => _floatingRioSize = newSize);
+    if (await FlutterOverlayWindow.isActive()) {
+      await FlutterOverlayWindow.resizeOverlay(newSize, newSize, true);
+      try {
+        await FlutterOverlayWindow.shareData('RESIZE|$newSize');
+      } catch (_) {}
     }
   }
 
@@ -161,7 +240,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           action,
           aiService: _aiService,
           onProgress: (msg) {
-            developer.log('Task progress: $msg', name: 'PrivateAgent');
+            developer.log('Task progress: $msg', name: 'AgentRio');
             _sendOverlayEvent('OVERLAY_PROGRESS', msg);
             if (mounted) {
               setState(() {
@@ -238,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!FeatureFlags.floatingOverlayEnabled) return;
     if (!await FlutterOverlayWindow.isPermissionGranted()) return;
 
-    // Never cover PrivateAgent itself. The lifecycle observer will create the
+    // Never cover Agent Rio itself. The lifecycle observer will create the
     // overlay after an automated action moves this app to the background.
     if (_appLifecycleState != AppLifecycleState.paused) return;
 
@@ -420,48 +499,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _updateOverlayState() async {
     if (!FeatureFlags.floatingOverlayEnabled) return;
     final generation = ++_overlayUpdateGeneration;
-    final isBackground = _appLifecycleState == AppLifecycleState.paused;
-    final shouldBeActive = isBackground;
 
-    bool granted = await FlutterOverlayWindow.isPermissionGranted();
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('rio_floating_enabled') ?? false;
+    final size = prefs.getInt('rio_floating_size') ?? _floatingRioSize;
+
+    bool granted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
     if (!granted || generation != _overlayUpdateGeneration) return;
 
-    bool active = await FlutterOverlayWindow.isActive();
+    bool active = await FlutterOverlayWindow.isActive() ?? false;
     if (generation != _overlayUpdateGeneration) return;
-    if (shouldBeActive && !active) {
-      await Future.delayed(const Duration(milliseconds: 200));
+
+    if (enabled && !active) {
+      await Future.delayed(const Duration(milliseconds: 150));
       if (generation != _overlayUpdateGeneration) return;
-      if (_appLifecycleState != AppLifecycleState.paused) return;
-      if (await FlutterOverlayWindow.isActive()) return;
+      if (await FlutterOverlayWindow.isActive() ?? false) return;
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
         overlayTitle: "Agent Rio",
         overlayContent: _isLoading
-            ? "Performing task..."
-            : "Agent Rio",
+            ? "Executing task..."
+            : "Agent Rio Assistant",
         flag: OverlayFlag.focusPointer,
         alignment: OverlayAlignment.centerRight,
         visibility: NotificationVisibility.visibilitySecret,
         positionGravity: PositionGravity.auto,
         startPosition: const OverlayPosition(0, 200),
-        width: 56,
-        height: 56,
+        width: size,
+        height: size,
       );
-      if (_isLoading && _appLifecycleState == AppLifecycleState.paused) {
-        // Give the overlay isolate time to attach its listener, then send the
-        // full active conversation. A second snapshot makes cold starts
-        // reliable without duplicating messages because the overlay replaces
-        // its list atomically.
+      if (_isLoading) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
         await _sendOverlayHistorySnapshot();
-        await Future<void>.delayed(const Duration(milliseconds: 250));
-        if (_isLoading && _appLifecycleState == AppLifecycleState.paused) {
-          await _sendOverlayHistorySnapshot();
-        }
       }
-    } else if (shouldBeActive && active && _isLoading) {
+    } else if (enabled && active && _isLoading) {
       await _sendOverlayHistorySnapshot();
-    } else if (!shouldBeActive && active) {
+    } else if (!enabled && active) {
       try {
         await FlutterOverlayWindow.shareData(
           'OVERLAY_RESET|',
@@ -469,7 +542,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 50));
       if (generation != _overlayUpdateGeneration) return;
-      if (_appLifecycleState == AppLifecycleState.paused) return;
       await FlutterOverlayWindow.closeOverlay();
     }
   }
@@ -483,30 +555,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? const Color(0xFF0C0A15)
           : const Color(0xFFFFFFFF),
       appBar: AppBar(
-        title: RichText(
-          text: TextSpan(
-            style: TextStyle(
-              fontSize: 20,
-              color: isDark ? Colors.white : const Color(0xFF1E293B),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366F1), Color(0xFF38BDF8)],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366F1).withOpacity(0.4),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.smart_toy_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
             ),
-            children: [
-              TextSpan(
-                text: 'Private',
+            const SizedBox(width: 8),
+            ShaderMask(
+              shaderCallback: (bounds) => const LinearGradient(
+                colors: [Color(0xFF818CF8), Color(0xFF38BDF8)],
+              ).createShader(bounds),
+              child: const Text(
+                'AGENT RIO',
                 style: TextStyle(
+                  fontSize: 18,
                   fontWeight: FontWeight.w900,
-                  color: Theme.of(context).colorScheme.primary,
-                  letterSpacing: -0.5,
+                  color: Colors.white,
+                  letterSpacing: 0.8,
                 ),
               ),
-              const TextSpan(
-                text: 'Agent',
-                style: TextStyle(
-                  fontWeight: FontWeight.w400,
-                  letterSpacing: -0.5,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         backgroundColor: Colors.transparent,
         scrolledUnderElevation: 0,
@@ -519,6 +606,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         ),
         actions: [
           IconButton(
+            icon: Icon(
+              _floatingRioEnabled
+                  ? Icons.picture_in_picture_alt_rounded
+                  : Icons.picture_in_picture_rounded,
+              color: _floatingRioEnabled
+                  ? const Color(0xFF38BDF8)
+                  : (isDark ? Colors.white60 : Colors.black54),
+            ),
+            tooltip: _floatingRioEnabled
+                ? 'Floating Rio is Active'
+                : 'Turn on Floating Rio',
+            onPressed: () => _toggleFloatingRio(!_floatingRioEnabled),
+          ),
+          IconButton(
             icon: const Icon(Icons.add_comment_outlined),
             tooltip: 'New chat',
             onPressed: _isLoading ? null : _startNewChat,
@@ -526,6 +627,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           // Settings Action
           IconButton(
             icon: const Icon(Icons.settings_rounded),
+            tooltip: 'Settings',
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -539,6 +641,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
               );
               await _actionHandler.shizuku.checkAvailability();
+              await _loadFloatingSettings();
               if (mounted) setState(() {});
             },
           ),
@@ -622,17 +725,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               Expanded(
                 child: _messages.isEmpty
                     ? _buildEmptyState(isDark)
-                    : ListView.builder(
-                        controller: _scrollController,
-                        physics: const BouncingScrollPhysics(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          return MessageBubble(message: _messages[index]);
-                        },
+                    : Column(
+                        children: [
+                          _buildMiniRioCompanionBar(isDark),
+                          Expanded(
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              physics: const BouncingScrollPhysics(),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              itemCount: _messages.length,
+                              itemBuilder: (context, index) {
+                                return MessageBubble(message: _messages[index]);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
               ),
 
@@ -1117,89 +1227,393 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    final time = DateTime.now();
-    String timeGreeting = 'Hello';
-    if (time.hour >= 5 && time.hour < 12) {
-      timeGreeting = 'Hello, good morning.';
-    } else if (time.hour >= 12 && time.hour < 17) {
-      timeGreeting = 'Hello, good afternoon.';
-    } else if (time.hour >= 17 && time.hour < 22) {
-      timeGreeting = 'Hello, good evening.';
+  Widget _buildMiniRioCompanionBar(bool isDark) {
+    String statusText;
+    Color statusColor;
+    if (_isLoading) {
+      statusText = '⚡ Rio is executing on screen...';
+      statusColor = const Color(0xFFF59E0B);
+    } else if (_isListening) {
+      statusText = '🎤 Rio is listening...';
+      statusColor = const Color(0xFFEF4444);
+    } else if (_rioState == RioAvatarState.success) {
+      statusText = '✓ Task completed successfully!';
+      statusColor = const Color(0xFF10B981);
     } else {
-      timeGreeting = 'Hello.';
+      statusText = '● Agent Rio is active • Tap Rio to speak';
+      statusColor = const Color(0xFF38BDF8);
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF131B2E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF243049).withOpacity(0.5)
+              : const Color(0xFFE2E8F0),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          RioAvatarWidget(
+            state: _rioState,
+            size: 42,
+            onTap: _toggleVoice,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Agent Rio Companion',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              _floatingRioEnabled
+                  ? Icons.picture_in_picture_alt_rounded
+                  : Icons.picture_in_picture_rounded,
+              size: 20,
+              color: _floatingRioEnabled
+                  ? const Color(0xFF38BDF8)
+                  : (isDark ? Colors.white38 : Colors.black38),
+            ),
+            tooltip: _floatingRioEnabled
+                ? 'Floating Avatar ON'
+                : 'Turn on Floating Avatar',
+            onPressed: () => _toggleFloatingRio(!_floatingRioEnabled),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    String statusText;
+    Color statusColor;
+    if (_isLoading) {
+      statusText = '⚡ Rio is executing on screen...';
+      statusColor = const Color(0xFFF59E0B);
+    } else if (_isListening) {
+      statusText = '🎤 Listening to your voice...';
+      statusColor = const Color(0xFFEF4444);
+    } else if (_rioState == RioAvatarState.success) {
+      statusText = '✓ Task completed!';
+      statusColor = const Color(0xFF10B981);
+    } else {
+      statusText = '● Agent Rio is Online • Tap to Speak';
+      statusColor = const Color(0xFF38BDF8);
     }
 
     final suggestions = _mode == 'chat'
         ? [
-            'Write a professional email',
             'Explain quantum computing simply',
+            'Draft a professional email',
             'Brainstorm mobile app ideas',
-            'Write a poem about robots',
+            'Write a futuristic sci-fi story',
           ]
         : [
-            'Open YouTube and search for cats',
-            'Call Mom',
-            'Set volume to 80%',
-            'What\'s on my screen?',
+            'What\'s on my screen right now?',
+            'Open YouTube and search lofi beats',
+            'Toggle Wi-Fi and Bluetooth',
+            'Set a timer for 15 minutes',
+            'Open Settings and check Battery',
           ];
 
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
           children: [
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Center Stage Rio Rive Character Hub
+            Center(
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Text(
-                    timeGreeting,
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w300,
-                      color: isDark
-                          ? const Color(0xFF94A3B8)
-                          : const Color(0xFF64748B),
-                      letterSpacing: -1.5,
-                      height: 1.1,
+                  // Subtle pulsing cyber glow circle behind Rio
+                  Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF6366F1).withOpacity(isDark ? 0.35 : 0.2),
+                          const Color(0xFF38BDF8).withOpacity(isDark ? 0.15 : 0.08),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.55, 1.0],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'How can I help you?',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.primary,
-                      letterSpacing: -1.5,
-                      height: 1.2,
+
+                  // The official Rio character
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: RioAvatarWidget(
+                      state: _rioState,
+                      size: 165.0,
+                      onTap: _toggleVoice,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 48),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'SUGGESTIONS',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  color: isDark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF475569),
-                  letterSpacing: 1.5,
+
+            const SizedBox(height: 10),
+
+            // Live status badge
+            GestureDetector(
+              onTap: _toggleVoice,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF131B2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: statusColor.withOpacity(0.4),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: statusColor.withOpacity(0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      statusText,
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: statusColor,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+
+            const SizedBox(height: 24),
+
+            // Floating Rio Controls Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF131B2E) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF243049).withOpacity(0.6)
+                      : const Color(0xFFE2E8F0),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDark ? 0.25 : 0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF6366F1).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.picture_in_picture_alt_rounded,
+                          color: Color(0xFF818CF8),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Floating Rio Assistant',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Float Rio over all apps & home screen',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _floatingRioEnabled,
+                        activeColor: const Color(0xFF6366F1),
+                        onChanged: _toggleFloatingRio,
+                      ),
+                    ],
+                  ),
+                  if (_floatingRioEnabled) ...[
+                    const Divider(height: 20, thickness: 0.8),
+                    Row(
+                      children: [
+                        Text(
+                          'Size Control:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark
+                                ? const Color(0xFF94A3B8)
+                                : const Color(0xFF64748B),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_floatingRioSize}dp',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF38BDF8),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [56, 72, 88, 104].map((sz) {
+                        final isSelected = _floatingRioSize == sz;
+                        final label = sz == 56
+                            ? '56dp'
+                            : sz == 72
+                                ? '72dp'
+                                : sz == 88
+                                    ? '88dp'
+                                    : '104dp';
+                        return InkWell(
+                          onTap: () => _changeFloatingRioSize(sz),
+                          borderRadius: BorderRadius.circular(12),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 7,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? const Color(0xFF6366F1)
+                                  : (isDark
+                                      ? const Color(0xFF1E293B)
+                                      : const Color(0xFFF1F5F9)),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isSelected
+                                    ? const Color(0xFF818CF8)
+                                    : Colors.transparent,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              label,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                                color: isSelected
+                                    ? Colors.white
+                                    : (isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF475569)),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // Suggestions header
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.bolt_rounded,
+                    size: 16,
+                    color: Color(0xFF38BDF8),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'QUICK COMMANDS',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF475569),
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Horizontal suggestions
             SizedBox(
-              height: 52,
+              height: 48,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
@@ -1207,44 +1621,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 itemBuilder: (context, index) {
                   final suggestion = suggestions[index];
                   return Container(
-                    margin: const EdgeInsets.only(right: 12),
+                    margin: const EdgeInsets.only(right: 10),
                     child: InkWell(
                       onTap: () => _sendMessage(suggestion),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(14),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
+                          horizontal: 16,
+                          vertical: 10,
                         ),
                         decoration: BoxDecoration(
                           color: isDark
-                              ? const Color(0xFF151D30)
+                              ? const Color(0xFF131B2E)
                               : Colors.white,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           border: Border.all(
                             color: isDark
-                                ? const Color(0xFF243049).withOpacity(0.4)
+                                ? const Color(0xFF243049).withOpacity(0.5)
                                 : const Color(0xFFE2E8F0),
-                            width: 1.2,
+                            width: 1.1,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(
-                                isDark ? 0.1 : 0.02,
-                              ),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
                         ),
                         child: Center(
                           child: Text(
                             suggestion,
                             style: TextStyle(
                               fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
+                              fontWeight: FontWeight.w500,
                               color: isDark
-                                  ? const Color(0xFFF8FAFC)
+                                  ? const Color(0xFFF1F5F9)
                                   : const Color(0xFF1E293B),
                             ),
                           ),

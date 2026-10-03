@@ -7,6 +7,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:android_intent_plus/android_intent.dart';
 import 'package:android_intent_plus/flag.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'services/ai_service.dart';
 import 'services/task_executor.dart';
 import 'services/screen_automation_service.dart';
@@ -27,6 +28,7 @@ class OverlayApp extends StatefulWidget {
 
 class _OverlayAppState extends State<OverlayApp> {
   bool _isExpanded = false;
+  int _floatingSize = 72;
   final TextEditingController _taskController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSent = false;
@@ -48,6 +50,10 @@ class _OverlayAppState extends State<OverlayApp> {
   @override
   void initState() {
     super.initState();
+    SharedPreferences.getInstance().then((prefs) {
+      final sz = prefs.getInt('rio_floating_size') ?? 72;
+      if (mounted) setState(() => _floatingSize = sz);
+    });
     _speech.initialize();
     _triggerService.onStateChanged = (state) {
       if (mounted) {
@@ -72,7 +78,7 @@ class _OverlayAppState extends State<OverlayApp> {
       ChatMessage(
         role: 'assistant',
         content:
-            'Hi! I am your Private Agent. Ask me to perform any task on your screen.',
+            'Hi! I am Agent Rio. Ask me to perform any task on your screen.',
       ),
     );
   }
@@ -86,11 +92,24 @@ class _OverlayAppState extends State<OverlayApp> {
   }
 
   void _handleMainAppEvent(dynamic event) {
-    if (event is! String || !event.startsWith('OVERLAY_')) return;
+    if (event is! String) return;
 
     final separator = event.indexOf('|');
     final type = separator == -1 ? event : event.substring(0, separator);
     final message = separator == -1 ? '' : event.substring(separator + 1);
+
+    if (type == 'RESIZE' || type == 'OVERLAY_RESIZE') {
+      final newSize = int.tryParse(message) ?? 72;
+      if (mounted) {
+        setState(() {
+          _floatingSize = newSize;
+        });
+      }
+      if (!_isExpanded) {
+        FlutterOverlayWindow.resizeOverlay(newSize, newSize, true);
+      }
+      return;
+    }
 
     if (type == 'OVERLAY_HISTORY') {
       try {
@@ -320,13 +339,13 @@ class _OverlayAppState extends State<OverlayApp> {
       );
       // Move to a safe position so the expanded panel stays on-screen
       await FlutterOverlayWindow.moveOverlay(initialPosition);
-      await FlutterOverlayWindow.resizeOverlay(300, 360, false);
+      await FlutterOverlayWindow.resizeOverlay(310, 380, false);
       setState(() {
         _isExpanded = true;
         _scrollToBottom();
       });
     } else {
-      await FlutterOverlayWindow.resizeOverlay(56, 56, true);
+      await FlutterOverlayWindow.resizeOverlay(_floatingSize, _floatingSize, true);
       // Restore the original bubble position
       if (_savedBubblePosition != null) {
         await FlutterOverlayWindow.moveOverlay(_savedBubblePosition!);
@@ -375,7 +394,7 @@ class _OverlayAppState extends State<OverlayApp> {
               _triggerService.handleAvatarTap();
             },
             onDoubleTap: _toggleExpanded,
-            size: 56.0,
+            size: _floatingSize.toDouble(),
           ),
         ),
       );
@@ -383,22 +402,25 @@ class _OverlayAppState extends State<OverlayApp> {
 
     // Full Chat Interface Panel
     return OverflowBox(
-      minWidth: 300,
-      maxWidth: 300,
-      minHeight: 360,
-      maxHeight: 360,
+      minWidth: 310,
+      maxWidth: 310,
+      minHeight: 380,
+      maxHeight: 380,
       alignment: Alignment.center,
       child: Container(
-        width: 300,
-        height: 360,
+        width: 310,
+        height: 380,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFF0B0F19),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: const Color(0xFFEAEAEA), width: 1),
+          border: Border.all(
+            color: const Color(0xFF6366F1).withOpacity(0.5),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 12,
+              color: const Color(0xFF6366F1).withOpacity(0.25),
+              blurRadius: 18,
               spreadRadius: 2,
               offset: const Offset(0, 4),
             ),
@@ -409,9 +431,16 @@ class _OverlayAppState extends State<OverlayApp> {
             // Header Bar
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
+                color: const Color(0xFF131B2E),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(22),
+                ),
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFF2F2F2), width: 1),
+                  bottom: BorderSide(
+                    color: const Color(0xFF243049).withOpacity(0.6),
+                    width: 1,
+                  ),
                 ),
               ),
               child: Row(
@@ -419,19 +448,23 @@ class _OverlayAppState extends State<OverlayApp> {
                 children: [
                   Row(
                     children: [
-                      Image.asset(
-                        'assets/app-logo.png',
-                        width: 18,
-                        height: 18,
-                        fit: BoxFit.contain,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.asset(
+                          'assets/app-logo.png',
+                          width: 22,
+                          height: 22,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        'Private Agent',
+                        'Agent Rio',
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ],
@@ -440,14 +473,14 @@ class _OverlayAppState extends State<OverlayApp> {
                     children: [
                       Semantics(
                         button: true,
-                        label: 'Open PrivateAgent',
+                        label: 'Open Agent Rio',
                         child: GestureDetector(
                           onTap: () => unawaited(_openMainApp()),
                           child: const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 8),
                             child: Icon(
                               Icons.open_in_new_rounded,
-                              color: Colors.black45,
+                              color: Color(0xFF94A3B8),
                               size: 18,
                             ),
                           ),
@@ -458,13 +491,13 @@ class _OverlayAppState extends State<OverlayApp> {
                         child: Container(
                           padding: const EdgeInsets.all(4),
                           decoration: const BoxDecoration(
-                            color: Color(0xFFF2F2F5),
+                            color: Color(0xFF1E293B),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
                             Icons.remove,
-                            color: Colors.black54,
-                            size: 12,
+                            color: Color(0xFF94A3B8),
+                            size: 14,
                           ),
                         ),
                       ),
@@ -477,7 +510,7 @@ class _OverlayAppState extends State<OverlayApp> {
             // Message Log List
             Expanded(
               child: Container(
-                color: const Color(0xFFF8FAFC),
+                color: const Color(0xFF070A13),
                 child: ListView.builder(
                   controller: _scrollController,
                   physics: const BouncingScrollPhysics(),
@@ -492,13 +525,16 @@ class _OverlayAppState extends State<OverlayApp> {
             // Input Controller Area
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: const Color(0xFF131B2E),
                 border: Border(
-                  top: BorderSide(color: Color(0xFFF2F2F2), width: 1),
+                  top: BorderSide(
+                    color: const Color(0xFF243049).withOpacity(0.6),
+                    width: 1,
+                  ),
                 ),
-                borderRadius: BorderRadius.vertical(
-                  bottom: Radius.circular(24),
+                borderRadius: const BorderRadius.vertical(
+                  bottom: Radius.circular(22),
                 ),
               ),
               child: Row(
@@ -510,13 +546,11 @@ class _OverlayAppState extends State<OverlayApp> {
                         vertical: 2,
                       ),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
+                        color: const Color(0xFF0B0F19),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.08),
-                          width: 1.2,
+                          color: const Color(0xFF334155),
+                          width: 1.0,
                         ),
                       ),
                       child: Row(
@@ -526,13 +560,13 @@ class _OverlayAppState extends State<OverlayApp> {
                               controller: _taskController,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Colors.black87,
+                                color: Colors.white,
                               ),
                               decoration: const InputDecoration(
-                                hintText: 'Type a command...',
+                                hintText: 'Ask Rio anything...',
                                 hintStyle: TextStyle(
                                   fontSize: 11.5,
-                                  color: Colors.grey,
+                                  color: Color(0xFF64748B),
                                 ),
                                 border: InputBorder.none,
                                 isDense: true,
@@ -549,8 +583,8 @@ class _OverlayAppState extends State<OverlayApp> {
                               child: Icon(
                                 _isListening ? Icons.mic : Icons.mic_none,
                                 color: _isListening
-                                    ? Colors.red
-                                    : Theme.of(context).colorScheme.primary,
+                                    ? Colors.redAccent
+                                    : const Color(0xFF38BDF8),
                                 size: 16,
                               ),
                             ),
@@ -567,7 +601,7 @@ class _OverlayAppState extends State<OverlayApp> {
                             padding: EdgeInsets.all(6),
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.black,
+                              color: Color(0xFF6366F1),
                             ),
                           ),
                         )
@@ -577,7 +611,7 @@ class _OverlayAppState extends State<OverlayApp> {
                             width: 28,
                             height: 28,
                             decoration: const BoxDecoration(
-                              color: Color(0xFF4F46E5),
+                              color: Color(0xFF6366F1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(

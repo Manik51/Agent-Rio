@@ -47,6 +47,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _useScreenCompression = true;
   bool _useSystemPrompt = true;
   bool _floatingIconEnabled = false;
+  int _floatingIconSize = 72;
   bool _isOverlayPermissionGranted = false;
   RioAvatarType _selectedAvatar = RioAvatarType.rioOfficial;
 
@@ -89,11 +90,32 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Future<void> _checkOverlayStatus() async {
-    bool isActive = await FlutterOverlayWindow.isActive();
-    bool isGranted = await FlutterOverlayWindow.isPermissionGranted();
+    final prefs = await SharedPreferences.getInstance();
+    final savedEnabled = prefs.getBool('rio_floating_enabled') ?? false;
+    final savedSize = prefs.getInt('rio_floating_size') ?? 72;
+    bool isActive = await FlutterOverlayWindow.isActive() ?? false;
+    bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+
+    if (savedEnabled && isGranted && !isActive) {
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true,
+        overlayTitle: "Agent Rio",
+        overlayContent: "Floating Assistant",
+        flag: OverlayFlag.focusPointer,
+        alignment: OverlayAlignment.centerRight,
+        visibility: NotificationVisibility.visibilitySecret,
+        positionGravity: PositionGravity.auto,
+        startPosition: const OverlayPosition(0, 200),
+        width: savedSize,
+        height: savedSize,
+      );
+      isActive = true;
+    }
+
     if (mounted) {
       setState(() {
-        _floatingIconEnabled = isActive;
+        _floatingIconEnabled = savedEnabled;
+        _floatingIconSize = savedSize;
         _isOverlayPermissionGranted = isGranted;
       });
     }
@@ -730,55 +752,135 @@ class _SettingsScreenState extends State<SettingsScreen>
                 },
                 contentPadding: EdgeInsets.zero,
               ),
-              if (FeatureFlags.floatingOverlayEnabled)
+              if (FeatureFlags.floatingOverlayEnabled) ...[
                 SwitchListTile(
                   title: const Text('Enable Floating Agent Icon'),
                   subtitle: const Text('Assign tasks without opening the app'),
                   value: _floatingIconEnabled,
                   onChanged: (val) async {
+                    final prefs = await SharedPreferences.getInstance();
                     if (val) {
-                      bool? isGranted =
-                          await FlutterOverlayWindow.isPermissionGranted();
-                      if (isGranted != true) {
-                        bool? result =
-                            await FlutterOverlayWindow.requestPermission();
-                        if (result != true) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
-                                  'Permission to draw over other apps is required.',
-                                ),
+                      bool isGranted =
+                          await FlutterOverlayWindow.isPermissionGranted() ??
+                              false;
+                      if (!isGranted) {
+                        await FlutterOverlayWindow.requestPermission();
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Please allow "Display over other apps" for Agent Rio.',
                               ),
-                            );
-                          }
-                          return;
+                              backgroundColor: Color(0xFF6366F1),
+                            ),
+                          );
                         }
                       }
-                      if (await FlutterOverlayWindow.isActive() == false) {
-                        await FlutterOverlayWindow.showOverlay(
-                          enableDrag: true,
-                          overlayTitle: "PrivateAgent",
-                          overlayContent: "Floating Assistant",
-                          flag: OverlayFlag.focusPointer,
-                          alignment: OverlayAlignment.centerRight,
-                          visibility: NotificationVisibility.visibilitySecret,
-                          positionGravity: PositionGravity.auto,
-                          startPosition: const OverlayPosition(0, 200),
-                          width: 56,
-                          height: 56,
-                        );
+                      await prefs.setBool('rio_floating_enabled', true);
+                      setState(() => _floatingIconEnabled = true);
+                      isGranted =
+                          await FlutterOverlayWindow.isPermissionGranted() ??
+                              false;
+                      if (isGranted) {
+                        if (!await FlutterOverlayWindow.isActive()) {
+                          await FlutterOverlayWindow.showOverlay(
+                            enableDrag: true,
+                            overlayTitle: "Agent Rio",
+                            overlayContent: "Floating Assistant",
+                            flag: OverlayFlag.focusPointer,
+                            alignment: OverlayAlignment.centerRight,
+                            visibility: NotificationVisibility.visibilitySecret,
+                            positionGravity: PositionGravity.auto,
+                            startPosition: const OverlayPosition(0, 200),
+                            width: _floatingIconSize,
+                            height: _floatingIconSize,
+                          );
+                        }
                       }
                     } else {
-                      if (await FlutterOverlayWindow.isActive() == true) {
+                      await prefs.setBool('rio_floating_enabled', false);
+                      setState(() => _floatingIconEnabled = false);
+                      if (await FlutterOverlayWindow.isActive()) {
                         await FlutterOverlayWindow.closeOverlay();
                       }
                     }
-                    setState(() => _floatingIconEnabled = val);
-                    _autoSave();
                   },
                   contentPadding: EdgeInsets.zero,
                 ),
+                if (_floatingIconEnabled) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text(
+                        'Floating Avatar Size',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '${_floatingIconSize}dp',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF6366F1),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [56, 72, 88, 104].map((sz) {
+                      final isSelected = _floatingIconSize == sz;
+                      final label = sz == 56
+                          ? 'Small'
+                          : sz == 72
+                              ? 'Medium'
+                              : sz == 88
+                                  ? 'Large'
+                                  : 'X-Large';
+                      return ChoiceChip(
+                        label: Text('$label (${sz}dp)'),
+                        selected: isSelected,
+                        selectedColor: const Color(0xFF6366F1),
+                        labelStyle: TextStyle(
+                          fontSize: 11.5,
+                          color: isSelected
+                              ? Colors.white
+                              : (isDark ? Colors.white70 : Colors.black87),
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        onSelected: (selected) async {
+                          if (selected) {
+                            final prefs =
+                                await SharedPreferences.getInstance();
+                            await prefs.setInt('rio_floating_size', sz);
+                            setState(() => _floatingIconSize = sz);
+                            if (await FlutterOverlayWindow.isActive()) {
+                              await FlutterOverlayWindow.resizeOverlay(
+                                sz,
+                                sz,
+                                true,
+                              );
+                              try {
+                                await FlutterOverlayWindow.shareData(
+                                  'RESIZE|$sz',
+                                );
+                              } catch (_) {}
+                            }
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+              ],
             ],
           ),
 
@@ -866,48 +968,33 @@ class _SettingsScreenState extends State<SettingsScreen>
           // 9. About / Links Card
           _buildSettingsCard(
             icon: Icons.info_outline_rounded,
-            title: 'About PrivateAgent',
-            subtitle: 'Resources and repository access',
+            title: 'About Agent Rio',
+            subtitle: 'Autonomous AI Companion & Screen Automation',
             isDark: isDark,
             children: [
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Project Repository'),
-                subtitle: const Text('View source code on GitHub'),
+                title: const Text('Agent Rio Repository'),
+                subtitle: const Text('View source code on GitHub (Manik51/Agent-Rio)'),
                 leading: const Icon(Icons.code_rounded),
                 onTap: () {
                   launchUrl(
-                    Uri.parse('https://github.com/orailnoor/private-agent'),
+                    Uri.parse('https://github.com/Manik51/Agent-Rio'),
                     mode: LaunchMode.externalApplication,
                   );
                 },
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Orailnoor on YouTube'),
-                subtitle: const Text('Subscribe for tutorials and updates'),
+                title: const Text('Agent Rio Releases'),
+                subtitle: const Text('Download latest release APKs'),
                 leading: const Icon(
-                  Icons.play_circle_fill_rounded,
-                  color: Colors.red,
+                  Icons.auto_awesome_rounded,
+                  color: Color(0xFF6366F1),
                 ),
                 onTap: () {
                   launchUrl(
-                    Uri.parse('https://www.youtube.com/orailnoor'),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Tech Jarves on YouTube'),
-                subtitle: const Text('Subscribe for tutorials and updates'),
-                leading: const Icon(
-                  Icons.play_circle_fill_rounded,
-                  color: Colors.red,
-                ),
-                onTap: () {
-                  launchUrl(
-                    Uri.parse('https://www.youtube.com/techjarves'),
+                    Uri.parse('https://github.com/Manik51/Agent-Rio/releases'),
                     mode: LaunchMode.externalApplication,
                   );
                 },

@@ -67,12 +67,12 @@ void main() async {
 
   final onboardingCompleted = prefs.getBool('onboarding_completed') ?? false;
 
-  runApp(PrivateAgentApp(onboardingCompleted: onboardingCompleted));
+  runApp(AgentRioApp(onboardingCompleted: onboardingCompleted));
 }
 
-class PrivateAgentApp extends StatelessWidget {
+class AgentRioApp extends StatelessWidget {
   final bool onboardingCompleted;
-  const PrivateAgentApp({super.key, required this.onboardingCompleted});
+  const AgentRioApp({super.key, required this.onboardingCompleted});
 
   @override
   Widget build(BuildContext context) {

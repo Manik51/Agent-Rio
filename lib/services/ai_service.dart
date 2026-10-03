@@ -18,7 +18,7 @@ class AiService {
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
   /// The live /models response is intersected with this list so unavailable or
-  /// non-chat models never appear in PrivateAgent's NVIDIA model picker.
+  /// non-chat models never appear in AgentRio's NVIDIA model picker.
   static const List<String> nvidiaFreeChatModels = [
     'z-ai/glm-5.2',
     'nvidia/nemotron-3-nano-30b-a3b',
@@ -566,7 +566,7 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
         int delaySeconds = 3 * currentTry;
         developer.log(
           'API call failed ($e), retrying $currentTry/$maxRetries in $delaySeconds seconds...',
-          name: 'PrivateAgent',
+          name: 'AgentRio',
         );
         await Future.delayed(Duration(seconds: delaySeconds));
       }
