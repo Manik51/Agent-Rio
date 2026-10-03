@@ -83,8 +83,9 @@ class AiService {
       id: 'nvidia',
       name: 'Nvidia NIM (Free Keys)',
       baseUrl: 'https://integrate.api.nvidia.com/v1',
-      defaultModel: 'meta/llama-3.3-70b-instruct',
+      defaultModel: 'z-ai/glm-5.2',
       popularModels: [
+        'z-ai/glm-5.2',
         'meta/llama-3.3-70b-instruct',
         'mistralai/mistral-nemotron',
         'nvidia/nemotron-3-nano-30b-a3b',
@@ -108,7 +109,7 @@ class AiService {
   static const String _defaultBaseUrl = 'https://api.groq.com/openai/v1';
   static const String _defaultModel = 'llama-3.3-70b-versatile';
   static const String nvidiaBaseUrl = 'https://integrate.api.nvidia.com/v1';
-  static const String nvidiaDefaultModel = 'meta/llama-3.3-70b-instruct';
+  static const String nvidiaDefaultModel = 'z-ai/glm-5.2';
 
   /// Free, general-purpose chat endpoints verified in NVIDIA's NIM catalog.
   static const List<String> nvidiaFreeChatModels = [
