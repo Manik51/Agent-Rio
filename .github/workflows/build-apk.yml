@@ -1,0 +1,87 @@
+name: Build Agent Rio Release APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Release APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Run Tests
+        run: flutter test
+
+      - name: Build Universal Release APK
+        run: flutter build apk --release
+
+      - name: Build Architecture-Specific APKs (Split ABI)
+        run: flutter build apk --release --split-per-abi
+
+      - name: Organize Release Artifacts
+        run: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/AgentRio-Universal-Release.apk
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/AgentRio-arm64-v8a-Release.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/AgentRio-armeabi-v7a-Release.apk
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/AgentRio-x86_64-Release.apk
+          cd dist
+          sha256sum *.apk > SHA256SUMS.txt
+          ls -lah
+
+      - name: Upload APKs as Workflow Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentRio-APKs
+          path: dist/*
+          retention-days: 30
+
+      - name: Create GitHub Release (On Tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true

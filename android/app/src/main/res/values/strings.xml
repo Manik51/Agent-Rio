@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_service_description">PrivateAgent uses this service to read your screen and perform actions like tapping, scrolling, and typing to automate tasks on your behalf.</string>
+    <string name="accessibility_service_description">Agent Rio uses this service to inspect the screen and execute UI actions (tapping, scrolling, typing) to complete your voice commands autonomously.</string>
 </resources>
