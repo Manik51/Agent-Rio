@@ -35,7 +35,8 @@ void main() {
     });
 
     test('RioAvatarType enum and companion avatars', () {
-      expect(RioAvatarType.values.length, 6);
+      expect(RioAvatarType.values.length, 7);
+      expect(RioAvatarType.values, contains(RioAvatarType.rioOfficial));
       expect(RioAvatarType.values, contains(RioAvatarType.pinkChill));
       expect(RioAvatarType.values, contains(RioAvatarType.yellowNerd));
       expect(RioAvatarType.values, contains(RioAvatarType.blueBeret));

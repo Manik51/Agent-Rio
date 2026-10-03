@@ -48,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _useSystemPrompt = true;
   bool _floatingIconEnabled = false;
   bool _isOverlayPermissionGranted = false;
-  RioAvatarType _selectedAvatar = RioAvatarType.pinkChill;
+  RioAvatarType _selectedAvatar = RioAvatarType.rioOfficial;
 
   final Map<String, PermissionStatus> _permissions = {};
 
@@ -1207,6 +1207,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               spacing: 8,
               runSpacing: 8,
               children: [
+                _buildAvatarChip(RioAvatarType.rioOfficial, '🤖 Rio (Official Rive)'),
                 _buildAvatarChip(RioAvatarType.pinkChill, '🎧 Pinky Chill'),
                 _buildAvatarChip(RioAvatarType.yellowNerd, '🤓 Professor Pip'),
                 _buildAvatarChip(RioAvatarType.blueBeret, '🎨 Blue Beret'),

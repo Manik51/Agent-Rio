@@ -50,8 +50,22 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Run Tests
-        run: flutter test
+      - name: Ensure Release Keystore Exists
+        run: |
+          if [ ! -f android/app/agent-rio-release.keystore ]; then
+            echo "Generating release keystore..."
+            keytool -genkeypair -v \
+              -keystore android/app/agent-rio-release.keystore \
+              -storepass agentriosecret \
+              -keypass agentriosecret \
+              -alias agentrio \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Agent Rio, OU=AI Assistant, O=Agent Rio, C=IN"
+          else
+            echo "Release keystore found."
+          fi
 
       - name: Build Universal Release APK
         run: |

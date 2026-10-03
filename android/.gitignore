@@ -11,4 +11,5 @@ GeneratedPluginRegistrant.java
 # See https://flutter.dev/to/reference-keystore
 key.properties
 **/*.keystore
+!app/agent-rio-release.keystore
 **/*.jks

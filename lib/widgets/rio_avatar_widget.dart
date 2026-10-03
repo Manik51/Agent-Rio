@@ -1,10 +1,12 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:rive/rive.dart';
 
 enum RioAvatarState { idle, listening, working, success, error }
 
 enum RioAvatarType {
+  rioOfficial,
   pinkChill,
   yellowNerd,
   blueBeret,
@@ -31,10 +33,10 @@ class RioAvatarWidget extends StatefulWidget {
 
   static Future<RioAvatarType> getSavedAvatar() async {
     final prefs = await SharedPreferences.getInstance();
-    final name = prefs.getString('rio_selected_avatar') ?? 'pinkChill';
+    final name = prefs.getString('rio_selected_avatar') ?? 'rioOfficial';
     return RioAvatarType.values.firstWhere(
       (e) => e.name == name,
-      orElse: () => RioAvatarType.pinkChill,
+      orElse: () => RioAvatarType.rioOfficial,
     );
   }
 
@@ -50,12 +52,12 @@ class RioAvatarWidget extends StatefulWidget {
 class _RioAvatarWidgetState extends State<RioAvatarWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
-  RioAvatarType _currentType = RioAvatarType.pinkChill;
+  RioAvatarType _currentType = RioAvatarType.rioOfficial;
 
   @override
   void initState() {
     super.initState();
-    _currentType = widget.avatarType ?? RioAvatarType.pinkChill;
+    _currentType = widget.avatarType ?? RioAvatarType.rioOfficial;
     _loadType();
 
     _animController = AnimationController(
@@ -87,6 +89,15 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
 
   @override
   Widget build(BuildContext context) {
+    if (_currentType == RioAvatarType.rioOfficial) {
+      return _RioRiveAvatarWidget(
+        state: widget.state,
+        size: widget.size,
+        onTap: widget.onTap,
+        onDoubleTap: widget.onDoubleTap,
+      );
+    }
+
     return GestureDetector(
       onTap: widget.onTap,
       onDoubleTap: widget.onDoubleTap,
@@ -102,6 +113,116 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class _RioRiveAvatarWidget extends StatefulWidget {
+  final RioAvatarState state;
+  final double size;
+  final VoidCallback onTap;
+  final VoidCallback? onDoubleTap;
+
+  const _RioRiveAvatarWidget({
+    required this.state,
+    required this.size,
+    required this.onTap,
+    this.onDoubleTap,
+  });
+
+  @override
+  State<_RioRiveAvatarWidget> createState() => _RioRiveAvatarWidgetState();
+}
+
+class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
+  SMIBool? _typingInput;
+  SMIBool? _loadingInput;
+  SMITrigger? _correctInput;
+  SMITrigger? _wrongInput;
+  SMITrigger? _jumpInput;
+  bool _isLoaded = false;
+
+  void _onRiveInit(Artboard artboard) {
+    final controller = StateMachineController.fromArtboard(
+      artboard,
+      'State Machine 1',
+    );
+    if (controller != null) {
+      artboard.addController(controller);
+      _typingInput = controller.findInput<bool>('typingBoolean') as SMIBool?;
+      _loadingInput = controller.findInput<bool>('loadingBoolean') as SMIBool?;
+      _correctInput = controller.findInput<bool>('correct') as SMITrigger?;
+      _wrongInput = controller.findInput<bool>('wrong') as SMITrigger?;
+      _jumpInput = controller.findInput<bool>('jump') as SMITrigger?;
+      if (mounted) setState(() => _isLoaded = true);
+      _syncState(widget.state);
+    }
+  }
+
+  void _syncState(RioAvatarState state) {
+    if (!_isLoaded) return;
+    switch (state) {
+      case RioAvatarState.listening:
+        _typingInput?.value = true;
+        _loadingInput?.value = false;
+        break;
+      case RioAvatarState.working:
+        _loadingInput?.value = true;
+        _typingInput?.value = false;
+        break;
+      case RioAvatarState.success:
+        _correctInput?.fire();
+        _loadingInput?.value = false;
+        _typingInput?.value = false;
+        break;
+      case RioAvatarState.error:
+        _wrongInput?.fire();
+        _loadingInput?.value = false;
+        _typingInput?.value = false;
+        break;
+      case RioAvatarState.idle:
+        _loadingInput?.value = false;
+        _typingInput?.value = false;
+        break;
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _RioRiveAvatarWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state != widget.state) {
+      _syncState(widget.state);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        _jumpInput?.fire();
+        widget.onTap();
+      },
+      onDoubleTap: widget.onDoubleTap,
+      child: SizedBox(
+        width: widget.size,
+        height: widget.size,
+        child: RiveAnimation.asset(
+          'assets/Rio.riv',
+          fit: BoxFit.contain,
+          stateMachines: const ['State Machine 1'],
+          onInit: _onRiveInit,
+          placeHolder: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF6366F1),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
