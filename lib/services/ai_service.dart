@@ -259,8 +259,8 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer $_apiKey',
-              'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-              'X-Title': 'PrivateAgent',
+              'HTTP-Referer': 'https://github.com/agent-rio',
+              'X-Title': 'Agent Rio',
             },
             body: requestBody,
           )
@@ -358,8 +358,8 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
       request.headers.addAll({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $_apiKey',
-        'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-        'X-Title': 'PrivateAgent',
+        'HTTP-Referer': 'https://github.com/agent-rio',
+        'X-Title': 'Agent Rio',
       });
 
       request.body = jsonEncode({
@@ -501,8 +501,8 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer $_apiKey',
-                'HTTP-Referer': 'https://github.com/orailnoor/private-agent',
-                'X-Title': 'PrivateAgent',
+                'HTTP-Referer': 'https://github.com/agent-rio',
+                'X-Title': 'Agent Rio',
               },
               body: jsonEncode({
                 'model': _model,

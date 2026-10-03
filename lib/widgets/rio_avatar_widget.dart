@@ -30,7 +30,7 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 3200),
     )..repeat();
   }
 
@@ -50,7 +50,7 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
         builder: (context, child) {
           return CustomPaint(
             size: Size(widget.size, widget.size),
-            painter: _RioAvatarPainter(
+            painter: _GptDotsPainter(
               animationValue: _animController.value,
               state: widget.state,
             ),
@@ -61,245 +61,182 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
   }
 }
 
-class _RioAvatarPainter extends CustomPainter {
+class _DotData {
+  final double x;
+  final double y;
+  final double radius;
+  final Color color;
+
+  _DotData({
+    required this.x,
+    required this.y,
+    required this.radius,
+    required this.color,
+  });
+}
+
+class _GptDotsPainter extends CustomPainter {
   final double animationValue;
   final RioAvatarState state;
 
-  _RioAvatarPainter({
+  _GptDotsPainter({
     required this.animationValue,
     required this.state,
   });
 
+  static const List<Color> _gptColors = [
+    Color(0xFFFFFFFF), // White luminous
+    Color(0xFF38BDF8), // Electric Sky Blue
+    Color(0xFFA855F7), // Neon Violet
+    Color(0xFFF43F5E), // Vivid Coral
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final baseRadius = size.width / 2;
+    final time = animationValue * 2 * math.pi;
 
-    switch (state) {
+    // 1. Ambient Background Glow Aura
+    final auraPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          _getAuraColor(state).withOpacity(0.35),
+          _getAuraColor(state).withOpacity(0.10),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: baseRadius * 1.1));
+    canvas.drawCircle(Offset(cx, cy), baseRadius * 1.1, auraPaint);
+
+    // 2. Compute 4 Fluid Dots Positions based on state
+    final dots = <_DotData>[];
+    const numDots = 4;
+
+    for (int i = 0; i < numDots; i++) {
+      double x, y, dotRadius;
+      final baseAngle = (i * (2 * math.pi) / numDots);
+
+      switch (state) {
+        case RioAvatarState.idle:
+          // Soft circular breathing orbit with gentle sine wave undulation
+          final orbitRadius = baseRadius * 0.44 + math.sin(time * 2 + i) * (baseRadius * 0.04);
+          final currentAngle = baseAngle + time * 0.8;
+          x = cx + math.cos(currentAngle) * orbitRadius;
+          y = cy + math.sin(currentAngle) * orbitRadius;
+          dotRadius = baseRadius * 0.22 + math.sin(time * 3 + i * 2) * (baseRadius * 0.03);
+          break;
+
+        case RioAvatarState.listening:
+          // Elastic acoustic frequency waves
+          final spread = baseRadius * 0.42;
+          final targetX = cx + (i - 1.5) * spread;
+          final waveHeight = (math.sin(time * 6 + i * 1.5).abs() * 0.55 + 0.20) * baseRadius;
+          x = targetX;
+          y = cy + math.sin(time * 4 + i) * (baseRadius * 0.08);
+          dotRadius = waveHeight * 0.45;
+          break;
+
+        case RioAvatarState.working:
+          // Rapid orbital swirl vortex
+          final orbitRadius = baseRadius * 0.48 + math.sin(time * 4) * (baseRadius * 0.08);
+          final currentAngle = baseAngle + time * 3.5;
+          x = cx + math.cos(currentAngle) * orbitRadius;
+          y = cy + math.sin(currentAngle) * orbitRadius;
+          dotRadius = baseRadius * 0.18 + math.cos(time * 6 + i) * (baseRadius * 0.04);
+          break;
+
+        case RioAvatarState.success:
+          // Harmonic bloom & breath
+          final bloom = math.sin(time * 4) * (baseRadius * 0.12);
+          final orbitRadius = baseRadius * 0.48 + bloom;
+          final currentAngle = baseAngle + time * 1.2;
+          x = cx + math.cos(currentAngle) * orbitRadius;
+          y = cy + math.sin(currentAngle) * orbitRadius;
+          dotRadius = baseRadius * 0.26 + math.sin(time * 4 + i) * (baseRadius * 0.04);
+          break;
+
+        case RioAvatarState.error:
+          // Mild warning vibration
+          final shake = math.sin(time * 12 + i) * 2;
+          x = cx + math.cos(baseAngle) * (baseRadius * 0.38) + shake;
+          y = cy + math.sin(baseAngle) * (baseRadius * 0.38);
+          dotRadius = baseRadius * 0.18;
+          break;
+      }
+
+      dots.add(_DotData(
+        x: x,
+        y: y,
+        radius: dotRadius,
+        color: state == RioAvatarState.error ? const Color(0xFFEF4444) : _gptColors[i],
+      ));
+    }
+
+    // 3. Draw Fluid Connective Bridges (Metaball effect)
+    for (int i = 0; i < dots.length; i++) {
+      for (int j = i + 1; j < dots.length; j++) {
+        final d1 = dots[i];
+        final d2 = dots[j];
+        final dist = math.sqrt(math.pow(d2.x - d1.x, 2) + math.pow(d2.y - d1.y, 2));
+        final maxConnectDist = baseRadius * 1.35;
+
+        if (dist < maxConnectDist) {
+          final opacity = ((maxConnectDist - dist) / maxConnectDist).clamp(0.0, 1.0) * 0.42;
+          final bridgePaint = Paint()
+            ..color = const Color(0xFF93C5FD).withOpacity(opacity)
+            ..strokeWidth = math.min(d1.radius, d2.radius) * 1.1
+            ..strokeCap = StrokeCap.round;
+          canvas.drawLine(Offset(d1.x, d1.y), Offset(d2.x, d2.y), bridgePaint);
+        }
+      }
+    }
+
+    // 4. Draw Radiant Glowing Dots
+    for (final d in dots) {
+      // Outer Soft Glow
+      final glowPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            d.color.withOpacity(0.65),
+            d.color.withOpacity(0.20),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(d.x, d.y), radius: d.radius * 2.2));
+      canvas.drawCircle(Offset(d.x, d.y), d.radius * 2.2, glowPaint);
+
+      // Core Luminous Solid Dot
+      final corePaint = Paint()
+        ..shader = RadialGradient(
+          center: const Alignment(-0.3, -0.3),
+          colors: [
+            Colors.white,
+            d.color,
+            d.color.withOpacity(0.85),
+          ],
+          stops: const [0.0, 0.45, 1.0],
+        ).createShader(Rect.fromCircle(center: Offset(d.x, d.y), radius: d.radius));
+      canvas.drawCircle(Offset(d.x, d.y), d.radius, corePaint);
+    }
+  }
+
+  Color _getAuraColor(RioAvatarState st) {
+    switch (st) {
       case RioAvatarState.idle:
-        _drawIdleState(canvas, center, radius);
-        break;
+        return const Color(0xFF6366F1); // Indigo
       case RioAvatarState.listening:
-        _drawListeningState(canvas, center, radius);
-        break;
+        return const Color(0xFF06B6D4); // Cyan
       case RioAvatarState.working:
-        _drawWorkingState(canvas, center, radius);
-        break;
+        return const Color(0xFFF59E0B); // Amber
       case RioAvatarState.success:
-        _drawSuccessState(canvas, center, radius);
-        break;
+        return const Color(0xFF10B981); // Emerald
       case RioAvatarState.error:
-        _drawErrorState(canvas, center, radius);
-        break;
+        return const Color(0xFFEF4444); // Red
     }
-  }
-
-  void _drawIdleState(Canvas canvas, Offset center, double radius) {
-    // Ambient breathing pulse
-    final pulse = math.sin(animationValue * 2 * math.pi) * 0.08 + 0.92;
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF6366F1).withOpacity(0.55),
-          const Color(0xFF38BDF8).withOpacity(0.2),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 1.15));
-
-    canvas.drawCircle(center, radius * 1.15 * pulse, glowPaint);
-
-    // Inner Core
-    final corePaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Color(0xFF818CF8), Color(0xFF4F46E5), Color(0xFF1E1B4B)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.75));
-    canvas.drawCircle(center, radius * 0.75, corePaint);
-
-    // Rotating orbital cyber ring
-    final ringPaint = Paint()
-      ..color = const Color(0xFF38BDF8).withOpacity(0.85)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final startAngle = animationValue * 2 * math.pi;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius * 0.82),
-      startAngle,
-      math.pi * 1.4,
-      false,
-      ringPaint,
-    );
-
-    // Rio Logo Core
-    _drawRioGlyph(canvas, center, radius * 0.45, Colors.white);
-  }
-
-  void _drawListeningState(Canvas canvas, Offset center, double radius) {
-    // Dynamic sound wave ripple rings
-    final wave1 = (animationValue * 1.3) % 1.0;
-    final wave2 = ((animationValue * 1.3) + 0.5) % 1.0;
-
-    final wavePaint1 = Paint()
-      ..color = const Color(0xFF06B6D4).withOpacity((1.0 - wave1) * 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    final wavePaint2 = Paint()
-      ..color = const Color(0xFF8B5CF6).withOpacity((1.0 - wave2) * 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    canvas.drawCircle(center, radius * (0.6 + wave1 * 0.4), wavePaint1);
-    canvas.drawCircle(center, radius * (0.6 + wave2 * 0.4), wavePaint2);
-
-    // Vibrant audio core
-    final corePaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Color(0xFF22D3EE), Color(0xFF6366F1), Color(0xFF0F172A)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.65));
-    canvas.drawCircle(center, radius * 0.65, corePaint);
-
-    // Audio Waveform bars in the center
-    final barPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-
-    final barOffsets = [-10.0, -5.0, 0.0, 5.0, 10.0];
-    for (int i = 0; i < barOffsets.length; i++) {
-      final barHeight = math.sin((animationValue * 4 * math.pi) + (i * 0.8)).abs() * 12 + 4;
-      canvas.drawLine(
-        Offset(center.dx + barOffsets[i], center.dy - barHeight / 2),
-        Offset(center.dx + barOffsets[i], center.dy + barHeight / 2),
-        barPaint,
-      );
-    }
-  }
-
-  void _drawWorkingState(Canvas canvas, Offset center, double radius) {
-    // High-tech quantum processor spin
-    final ringPaint1 = Paint()
-      ..color = const Color(0xFFF59E0B)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
-
-    final ringPaint2 = Paint()
-      ..color = const Color(0xFF06B6D4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final rot1 = animationValue * 4 * math.pi;
-    final rot2 = -animationValue * 3 * math.pi;
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius * 0.85),
-      rot1,
-      math.pi * 0.9,
-      false,
-      ringPaint1,
-    );
-
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius * 0.70),
-      rot2,
-      math.pi * 1.2,
-      false,
-      ringPaint2,
-    );
-
-    // Core
-    final corePaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Color(0xFFFBBF24), Color(0xFFD97706), Color(0xFF1E1B4B)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.55));
-    canvas.drawCircle(center, radius * 0.55, corePaint);
-
-    _drawRioGlyph(canvas, center, radius * 0.35, Colors.white);
-  }
-
-  void _drawSuccessState(Canvas canvas, Offset center, double radius) {
-    // Emerald confirmation glow
-    final glowPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF10B981).withOpacity(0.6),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: radius));
-    canvas.drawCircle(center, radius, glowPaint);
-
-    final corePaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Color(0xFF34D399), Color(0xFF059669), Color(0xFF064E3B)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.7));
-    canvas.drawCircle(center, radius * 0.7, corePaint);
-
-    // Checkmark
-    final checkPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final path = Path()
-      ..moveTo(center.dx - 8, center.dy)
-      ..lineTo(center.dx - 2, center.dy + 6)
-      ..lineTo(center.dx + 8, center.dy - 6);
-    canvas.drawPath(path, checkPaint);
-  }
-
-  void _drawErrorState(Canvas canvas, Offset center, double radius) {
-    final corePaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [Color(0xFFF87171), Color(0xFFDC2626), Color(0xFF450A0A)],
-      ).createShader(Rect.fromCircle(center: center, radius: radius * 0.7));
-    canvas.drawCircle(center, radius * 0.7, corePaint);
-
-    final markPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3.0
-      ..strokeCap = StrokeCap.round;
-
-    canvas.drawLine(
-      Offset(center.dx - 6, center.dy - 6),
-      Offset(center.dx + 6, center.dy + 6),
-      markPaint,
-    );
-    canvas.drawLine(
-      Offset(center.dx + 6, center.dy - 6),
-      Offset(center.dx - 6, center.dy + 6),
-      markPaint,
-    );
-  }
-
-  void _drawRioGlyph(Canvas canvas, Offset center, double size, Color color) {
-    // Modern stylized "R" glyph
-    final glyphPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.2
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path()
-      ..moveTo(center.dx - size * 0.5, center.dy + size * 0.7)
-      ..lineTo(center.dx - size * 0.5, center.dy - size * 0.7)
-      ..cubicTo(
-        center.dx + size * 0.6,
-        center.dy - size * 0.7,
-        center.dx + size * 0.6,
-        center.dy,
-        center.dx - size * 0.5,
-        center.dy,
-      )
-      ..moveTo(center.dx - size * 0.1, center.dy)
-      ..lineTo(center.dx + size * 0.5, center.dy + size * 0.7);
-
-    canvas.drawPath(path, glyphPaint);
   }
 
   @override
-  bool shouldRepaint(covariant _RioAvatarPainter oldDelegate) {
+  bool shouldRepaint(covariant _GptDotsPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue ||
         oldDelegate.state != state;
   }

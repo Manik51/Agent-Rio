@@ -503,12 +503,37 @@ class _SettingsScreenState extends State<SettingsScreen>
                     },
                   ),
                   ActionChip(
+                    avatar: const Icon(Icons.hub_rounded, size: 16),
+                    label: const Text(
+                      'OpenRouter',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: () {
+                      _baseUrlController.text = 'https://openrouter.ai/api/v1';
+                      _modelController.text = 'google/gemini-2.0-flash-001';
+                    },
+                  ),
+                  ActionChip(
+                    avatar: const Icon(Icons.auto_awesome, size: 16),
+                    label: const Text(
+                      'Gemini',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                    ),
+                    tooltip: 'Google Gemini direct API',
+                    onPressed: () {
+                      _baseUrlController.text = 'https://generativelanguage.googleapis.com/v1beta/openai';
+                      _modelController.text = 'gemini-2.0-flash';
+                    },
+                  ),
+                  ActionChip(
                     label: const Text(
                       'DeepSeek',
                       style: TextStyle(fontSize: 11),
                     ),
-                    onPressed: () =>
-                        _baseUrlController.text = 'https://api.deepseek.com',
+                    onPressed: () {
+                      _baseUrlController.text = 'https://api.deepseek.com';
+                      _modelController.text = 'deepseek-chat';
+                    },
                   ),
                   ActionChip(
                     label: const Text('Groq', style: TextStyle(fontSize: 11)),
