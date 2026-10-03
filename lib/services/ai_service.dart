@@ -208,6 +208,11 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
     }
   }
 
+  /// Natural conversation method for Agent Rio voice and chat interactions
+  Future<String> chat(String message) async {
+    return sendMessage(message, isAgentMode: false);
+  }
+
   /// Send a message to the AI and get a response.
   Future<String> sendMessage(String message, {bool isAgentMode = true}) async {
     if (_apiKey == null || _apiKey!.isEmpty) {

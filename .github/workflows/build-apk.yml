@@ -54,18 +54,17 @@ jobs:
         run: flutter test
 
       - name: Build Universal Release APK
-        run: flutter build apk --release
-
-      - name: Build Architecture-Specific APKs (Split ABI)
-        run: flutter build apk --release --split-per-abi
-
-      - name: Organize Release Artifacts
         run: |
           mkdir -p dist
+          flutter build apk --release --no-tree-shake-icons
           cp build/app/outputs/flutter-apk/app-release.apk dist/AgentRio-Universal-Release.apk
-          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/AgentRio-arm64-v8a-Release.apk
-          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/AgentRio-armeabi-v7a-Release.apk
-          cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/AgentRio-x86_64-Release.apk
+
+      - name: Build Architecture-Specific APKs (Split ABI)
+        run: |
+          flutter build apk --release --split-per-abi --no-tree-shake-icons
+          [ -f build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ] && cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/AgentRio-arm64-v8a-Release.apk
+          [ -f build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk ] && cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk dist/AgentRio-armeabi-v7a-Release.apk
+          [ -f build/app/outputs/flutter-apk/app-x86_64-release.apk ] && cp build/app/outputs/flutter-apk/app-x86_64-release.apk dist/AgentRio-x86_64-Release.apk
           cd dist
           sha256sum *.apk > SHA256SUMS.txt
           ls -lah
