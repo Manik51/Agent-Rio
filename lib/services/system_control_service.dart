@@ -4,7 +4,9 @@ import 'package:screen_brightness/screen_brightness.dart';
 class SystemControlService {
   SystemControlService() {
     // Don't show system volume UI when we control it
-    VolumeController().showSystemUI = false;
+    try {
+      VolumeController().showSystemUI = false;
+    } catch (_) {}
   }
 
   /// Set media volume (0-100)
