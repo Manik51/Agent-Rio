@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:rive/rive.dart';
+import 'package:rive/rive.dart' hide RadialGradient;
 
 enum RioAvatarState { idle, listening, working, success, error }
 
@@ -278,6 +278,8 @@ class _CompanionAvatarPainter extends CustomPainter {
     }
 
     switch (type) {
+      case RioAvatarType.rioOfficial:
+        break;
       case RioAvatarType.pinkChill:
         _drawPinkChill(canvas, center, r, time);
         break;
