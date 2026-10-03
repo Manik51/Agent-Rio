@@ -12,6 +12,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../config/feature_flags.dart';
 import '../services/rio_tts_service.dart';
 import '../services/rio_trigger_service.dart';
+import '../widgets/rio_avatar_widget.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AiService aiService;
@@ -47,12 +48,16 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _useSystemPrompt = true;
   bool _floatingIconEnabled = false;
   bool _isOverlayPermissionGranted = false;
+  RioAvatarType _selectedAvatar = RioAvatarType.pinkChill;
 
   final Map<String, PermissionStatus> _permissions = {};
 
   @override
   void initState() {
     super.initState();
+    RioAvatarWidget.getSavedAvatar().then((type) {
+      if (mounted) setState(() => _selectedAvatar = type);
+    });
     WidgetsBinding.instance.addObserver(this);
     _apiKeyController = TextEditingController(text: widget.aiService.apiKey);
     _baseUrlController = TextEditingController(text: widget.aiService.baseUrl);
@@ -1181,9 +1186,59 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ],
             ),
+            const Divider(height: 28),
+            Row(
+              children: [
+                const Icon(Icons.face_rounded, color: Color(0xFFEC4899), size: 20),
+                const SizedBox(width: 8),
+                const Text(
+                  'Choose Your Companion Avatar',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Select which character avatar floats on your screen:',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildAvatarChip(RioAvatarType.pinkChill, '🎧 Pinky Chill'),
+                _buildAvatarChip(RioAvatarType.yellowNerd, '🤓 Professor Pip'),
+                _buildAvatarChip(RioAvatarType.blueBeret, '🎨 Blue Beret'),
+                _buildAvatarChip(RioAvatarType.greenFrog, '🐸 Froggy'),
+                _buildAvatarChip(RioAvatarType.heartCool, '💖 Hearty'),
+                _buildAvatarChip(RioAvatarType.gptDots, '⚪ GPT Dots'),
+              ],
+            ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAvatarChip(RioAvatarType type, String label) {
+    final isSelected = _selectedAvatar == type;
+    return ChoiceChip(
+      selected: isSelected,
+      selectedColor: const Color(0xFF4F46E5).withOpacity(0.2),
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      onSelected: (val) async {
+        if (val) {
+          await RioAvatarWidget.saveAvatar(type);
+          setState(() => _selectedAvatar = type);
+        }
+      },
     );
   }
 }

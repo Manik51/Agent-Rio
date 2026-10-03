@@ -1,13 +1,24 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum RioAvatarState { idle, listening, working, success, error }
+
+enum RioAvatarType {
+  pinkChill,
+  yellowNerd,
+  blueBeret,
+  greenFrog,
+  heartCool,
+  gptDots,
+}
 
 class RioAvatarWidget extends StatefulWidget {
   final RioAvatarState state;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
   final double size;
+  final RioAvatarType? avatarType;
 
   const RioAvatarWidget({
     super.key,
@@ -15,7 +26,22 @@ class RioAvatarWidget extends StatefulWidget {
     required this.onTap,
     this.onDoubleTap,
     this.size = 56.0,
+    this.avatarType,
   });
+
+  static Future<RioAvatarType> getSavedAvatar() async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = prefs.getString('rio_selected_avatar') ?? 'pinkChill';
+    return RioAvatarType.values.firstWhere(
+      (e) => e.name == name,
+      orElse: () => RioAvatarType.pinkChill,
+    );
+  }
+
+  static Future<void> saveAvatar(RioAvatarType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('rio_selected_avatar', type.name);
+  }
 
   @override
   State<RioAvatarWidget> createState() => _RioAvatarWidgetState();
@@ -24,14 +50,33 @@ class RioAvatarWidget extends StatefulWidget {
 class _RioAvatarWidgetState extends State<RioAvatarWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
+  RioAvatarType _currentType = RioAvatarType.pinkChill;
 
   @override
   void initState() {
     super.initState();
+    _currentType = widget.avatarType ?? RioAvatarType.pinkChill;
+    _loadType();
+
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 3200),
+      duration: const Duration(milliseconds: 2800),
     )..repeat();
+  }
+
+  Future<void> _loadType() async {
+    if (widget.avatarType == null) {
+      final saved = await RioAvatarWidget.getSavedAvatar();
+      if (mounted) setState(() => _currentType = saved);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant RioAvatarWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.avatarType != null && widget.avatarType != _currentType) {
+      setState(() => _currentType = widget.avatarType!);
+    }
   }
 
   @override
@@ -50,9 +95,10 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
         builder: (context, child) {
           return CustomPaint(
             size: Size(widget.size, widget.size),
-            painter: _GptDotsPainter(
+            painter: _CompanionAvatarPainter(
               animationValue: _animController.value,
               state: widget.state,
+              type: _currentType,
             ),
           );
         },
@@ -61,183 +107,275 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
   }
 }
 
-class _DotData {
-  final double x;
-  final double y;
-  final double radius;
-  final Color color;
-
-  _DotData({
-    required this.x,
-    required this.y,
-    required this.radius,
-    required this.color,
-  });
-}
-
-class _GptDotsPainter extends CustomPainter {
+class _CompanionAvatarPainter extends CustomPainter {
   final double animationValue;
   final RioAvatarState state;
+  final RioAvatarType type;
 
-  _GptDotsPainter({
+  _CompanionAvatarPainter({
     required this.animationValue,
     required this.state,
+    required this.type,
   });
-
-  static const List<Color> _gptColors = [
-    Color(0xFFFFFFFF), // White luminous
-    Color(0xFF38BDF8), // Electric Sky Blue
-    Color(0xFFA855F7), // Neon Violet
-    Color(0xFFF43F5E), // Vivid Coral
-  ];
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final baseRadius = size.width / 2;
+    final r = size.width / 2;
     final time = animationValue * 2 * math.pi;
 
-    // 1. Ambient Background Glow Aura
-    final auraPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          _getAuraColor(state).withOpacity(0.35),
-          _getAuraColor(state).withOpacity(0.10),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: baseRadius * 1.1));
-    canvas.drawCircle(Offset(cx, cy), baseRadius * 1.1, auraPaint);
-
-    // 2. Compute 4 Fluid Dots Positions based on state
-    final dots = <_DotData>[];
-    const numDots = 4;
-
-    for (int i = 0; i < numDots; i++) {
-      double x, y, dotRadius;
-      final baseAngle = (i * (2 * math.pi) / numDots);
-
-      switch (state) {
-        case RioAvatarState.idle:
-          // Soft circular breathing orbit with gentle sine wave undulation
-          final orbitRadius = baseRadius * 0.44 + math.sin(time * 2 + i) * (baseRadius * 0.04);
-          final currentAngle = baseAngle + time * 0.8;
-          x = cx + math.cos(currentAngle) * orbitRadius;
-          y = cy + math.sin(currentAngle) * orbitRadius;
-          dotRadius = baseRadius * 0.22 + math.sin(time * 3 + i * 2) * (baseRadius * 0.03);
-          break;
-
-        case RioAvatarState.listening:
-          // Elastic acoustic frequency waves
-          final spread = baseRadius * 0.42;
-          final targetX = cx + (i - 1.5) * spread;
-          final waveHeight = (math.sin(time * 6 + i * 1.5).abs() * 0.55 + 0.20) * baseRadius;
-          x = targetX;
-          y = cy + math.sin(time * 4 + i) * (baseRadius * 0.08);
-          dotRadius = waveHeight * 0.45;
-          break;
-
-        case RioAvatarState.working:
-          // Rapid orbital swirl vortex
-          final orbitRadius = baseRadius * 0.48 + math.sin(time * 4) * (baseRadius * 0.08);
-          final currentAngle = baseAngle + time * 3.5;
-          x = cx + math.cos(currentAngle) * orbitRadius;
-          y = cy + math.sin(currentAngle) * orbitRadius;
-          dotRadius = baseRadius * 0.18 + math.cos(time * 6 + i) * (baseRadius * 0.04);
-          break;
-
-        case RioAvatarState.success:
-          // Harmonic bloom & breath
-          final bloom = math.sin(time * 4) * (baseRadius * 0.12);
-          final orbitRadius = baseRadius * 0.48 + bloom;
-          final currentAngle = baseAngle + time * 1.2;
-          x = cx + math.cos(currentAngle) * orbitRadius;
-          y = cy + math.sin(currentAngle) * orbitRadius;
-          dotRadius = baseRadius * 0.26 + math.sin(time * 4 + i) * (baseRadius * 0.04);
-          break;
-
-        case RioAvatarState.error:
-          // Mild warning vibration
-          final shake = math.sin(time * 12 + i) * 2;
-          x = cx + math.cos(baseAngle) * (baseRadius * 0.38) + shake;
-          y = cy + math.sin(baseAngle) * (baseRadius * 0.38);
-          dotRadius = baseRadius * 0.18;
-          break;
-      }
-
-      dots.add(_DotData(
-        x: x,
-        y: y,
-        radius: dotRadius,
-        color: state == RioAvatarState.error ? const Color(0xFFEF4444) : _gptColors[i],
-      ));
+    if (type == RioAvatarType.gptDots) {
+      _drawGptDots(canvas, cx, cy, r, time);
+      return;
     }
 
-    // 3. Draw Fluid Connective Bridges (Metaball effect)
-    for (int i = 0; i < dots.length; i++) {
-      for (int j = i + 1; j < dots.length; j++) {
-        final d1 = dots[i];
-        final d2 = dots[j];
-        final dist = math.sqrt(math.pow(d2.x - d1.x, 2) + math.pow(d2.y - d1.y, 2));
-        final maxConnectDist = baseRadius * 1.35;
+    // Breathing float & bounce
+    final bounce = math.sin(time * 2) * (r * 0.05);
+    final center = Offset(cx, cy + bounce);
 
-        if (dist < maxConnectDist) {
-          final opacity = ((maxConnectDist - dist) / maxConnectDist).clamp(0.0, 1.0) * 0.42;
-          final bridgePaint = Paint()
-            ..color = const Color(0xFF93C5FD).withOpacity(opacity)
-            ..strokeWidth = math.min(d1.radius, d2.radius) * 1.1
-            ..strokeCap = StrokeCap.round;
-          canvas.drawLine(Offset(d1.x, d1.y), Offset(d2.x, d2.y), bridgePaint);
-        }
-      }
-    }
-
-    // 4. Draw Radiant Glowing Dots
-    for (final d in dots) {
-      // Outer Soft Glow
+    // Reactive glow ring when listening / working
+    if (state == RioAvatarState.listening) {
+      final pulse = (math.sin(time * 6).abs() * 0.2 + 0.95);
       final glowPaint = Paint()
-        ..shader = RadialGradient(
-          colors: [
-            d.color.withOpacity(0.65),
-            d.color.withOpacity(0.20),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromCircle(center: Offset(d.x, d.y), radius: d.radius * 2.2));
-      canvas.drawCircle(Offset(d.x, d.y), d.radius * 2.2, glowPaint);
+        ..color = const Color(0xFF38BDF8).withOpacity(0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3.5;
+      canvas.drawCircle(center, r * pulse, glowPaint);
+    } else if (state == RioAvatarState.working) {
+      final ringPaint = Paint()
+        ..color = const Color(0xFFF59E0B)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: r * 0.96),
+        time * 3,
+        math.pi * 1.3,
+        false,
+        ringPaint,
+      );
+    }
 
-      // Core Luminous Solid Dot
-      final corePaint = Paint()
-        ..shader = RadialGradient(
-          center: const Alignment(-0.3, -0.3),
-          colors: [
-            Colors.white,
-            d.color,
-            d.color.withOpacity(0.85),
-          ],
-          stops: const [0.0, 0.45, 1.0],
-        ).createShader(Rect.fromCircle(center: Offset(d.x, d.y), radius: d.radius));
-      canvas.drawCircle(Offset(d.x, d.y), d.radius, corePaint);
+    switch (type) {
+      case RioAvatarType.pinkChill:
+        _drawPinkChill(canvas, center, r, time);
+        break;
+      case RioAvatarType.yellowNerd:
+        _drawYellowNerd(canvas, center, r, time);
+        break;
+      case RioAvatarType.blueBeret:
+        _drawBlueBeret(canvas, center, r, time);
+        break;
+      case RioAvatarType.greenFrog:
+        _drawGreenFrog(canvas, center, r, time);
+        break;
+      case RioAvatarType.heartCool:
+        _drawHeartCool(canvas, center, r, time);
+        break;
+      case RioAvatarType.gptDots:
+        break;
     }
   }
 
-  Color _getAuraColor(RioAvatarState st) {
-    switch (st) {
-      case RioAvatarState.idle:
-        return const Color(0xFF6366F1); // Indigo
-      case RioAvatarState.listening:
-        return const Color(0xFF06B6D4); // Cyan
-      case RioAvatarState.working:
-        return const Color(0xFFF59E0B); // Amber
-      case RioAvatarState.success:
-        return const Color(0xFF10B981); // Emerald
-      case RioAvatarState.error:
-        return const Color(0xFFEF4444); // Red
+  // 1. Pink Chill (Pink fuzzy ball with black over-ear headphones)
+  void _drawPinkChill(Canvas canvas, Offset center, double r, double time) {
+    final bodyPaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFFF472B6), Color(0xFFEC4899), Color(0xFFBE185D)],
+        stops: [0.0, 0.6, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: r * 0.72));
+
+    canvas.drawCircle(center, r * 0.72, bodyPaint);
+
+    // Cute closed smiling eyes
+    final eyePaint = Paint()
+      ..color = const Color(0xFF1E293B)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.4
+      ..strokeCap = StrokeCap.round;
+
+    final leftEye = Rect.fromCircle(center: Offset(center.dx - r * 0.24, center.dy - r * 0.05), radius: r * 0.14);
+    final rightEye = Rect.fromCircle(center: Offset(center.dx + r * 0.24, center.dy - r * 0.05), radius: r * 0.14);
+    canvas.drawArc(leftEye, 0, math.pi, false, eyePaint);
+    canvas.drawArc(rightEye, 0, math.pi, false, eyePaint);
+
+    // Happy little mouth
+    final mouthRect = Rect.fromCircle(center: Offset(center.dx, center.dy + r * 0.18), radius: r * 0.10);
+    canvas.drawArc(mouthRect, 0, math.pi, false, eyePaint);
+
+    // Over-ear Headphones (Headband + Earcups)
+    final bandPaint = Paint()
+      ..color = const Color(0xFF0F172A)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(Rect.fromCircle(center: center, radius: r * 0.84), math.pi, math.pi, false, bandPaint);
+
+    final earCupPaint = Paint()..color = const Color(0xFF1E293B);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(center.dx - r * 0.78, center.dy), width: r * 0.22, height: r * 0.52), const Radius.circular(8)),
+      earCupPaint,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(center.dx + r * 0.78, center.dy), width: r * 0.22, height: r * 0.52), const Radius.circular(8)),
+      earCupPaint,
+    );
+  }
+
+  // 2. Yellow Nerd (Yellow triangle creature with nerd glasses and bow tie)
+  void _drawYellowNerd(Canvas canvas, Offset center, double r, double time) {
+    final bodyPaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFFFDE047), Color(0xFFEAB308), Color(0xFFCA8A04)],
+      ).createShader(Rect.fromCircle(center: center, radius: r * 0.75));
+
+    final path = Path()
+      ..moveTo(center.dx, center.dy - r * 0.78)
+      ..quadraticBezierTo(center.dx + r * 0.80, center.dy + r * 0.75, center.dx, center.dy + r * 0.75)
+      ..quadraticBezierTo(center.dx - r * 0.80, center.dy + r * 0.75, center.dx, center.dy - r * 0.78);
+    canvas.drawPath(path, bodyPaint);
+
+    // Round Glasses
+    final glassFrame = Paint()
+      ..color = Colors.black87
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.8;
+
+    final lensFill = Paint()..color = Colors.white;
+
+    final leftCenter = Offset(center.dx - r * 0.26, center.dy - r * 0.12);
+    final rightCenter = Offset(center.dx + r * 0.26, center.dy - r * 0.12);
+
+    canvas.drawCircle(leftCenter, r * 0.24, lensFill);
+    canvas.drawCircle(rightCenter, r * 0.24, lensFill);
+    canvas.drawCircle(leftCenter, r * 0.24, glassFrame);
+    canvas.drawCircle(rightCenter, r * 0.24, glassFrame);
+    canvas.drawLine(Offset(leftCenter.dx + r * 0.24, leftCenter.dy), Offset(rightCenter.dx - r * 0.24, rightCenter.dy), glassFrame);
+
+    // Pupils
+    final pupilPaint = Paint()..color = Colors.black;
+    canvas.drawCircle(leftCenter, r * 0.10, pupilPaint);
+    canvas.drawCircle(rightCenter, r * 0.10, pupilPaint);
+
+    // Black Bow Tie
+    _drawBowTie(canvas, Offset(center.dx, center.dy + r * 0.48), r * 0.32, Colors.black87);
+  }
+
+  // 3. Blue Beret (Blue fuzzy cloud with stylish black French beret)
+  void _drawBlueBeret(Canvas canvas, Offset center, double r, double time) {
+    final cloudPaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFF60A5FA), Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+      ).createShader(Rect.fromCircle(center: center, radius: r * 0.75));
+
+    // Fluffy cloud body
+    canvas.drawCircle(center, r * 0.58, cloudPaint);
+    canvas.drawCircle(Offset(center.dx - r * 0.32, center.dy + r * 0.12), r * 0.34, cloudPaint);
+    canvas.drawCircle(Offset(center.dx + r * 0.32, center.dy + r * 0.12), r * 0.34, cloudPaint);
+
+    // Eyes
+    final eyePaint = Paint()..color = Colors.black87;
+    canvas.drawCircle(Offset(center.dx - r * 0.14, center.dy + r * 0.05), r * 0.07, eyePaint);
+    canvas.drawCircle(Offset(center.dx + r * 0.14, center.dy + r * 0.05), r * 0.07, eyePaint);
+
+    // Black Beret on top slanted
+    final beretPaint = Paint()..color = const Color(0xFF0F172A);
+    canvas.save();
+    canvas.translate(center.dx - r * 0.12, center.dy - r * 0.52);
+    canvas.rotate(-0.25);
+    canvas.drawOval(Rect.fromCenter(center: Offset.zero, width: r * 0.85, height: r * 0.38), beretPaint);
+    canvas.drawCircle(Offset(0, -r * 0.18), r * 0.06, beretPaint);
+    canvas.restore();
+  }
+
+  // 4. Green Frog (Curious green frog with top eyes and black bow tie)
+  void _drawGreenFrog(Canvas canvas, Offset center, double r, double time) {
+    final frogPaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFFA3E635), Color(0xFF84CC16), Color(0xFF4D7C0F)],
+      ).createShader(Rect.fromCircle(center: center, radius: r * 0.75));
+
+    // Body
+    canvas.drawCircle(Offset(center.dx, center.dy + r * 0.12), r * 0.60, frogPaint);
+
+    // Two big cute frog eyes popping on top
+    final leftEyeTop = Offset(center.dx - r * 0.32, center.dy - r * 0.40);
+    final rightEyeTop = Offset(center.dx + r * 0.32, center.dy - r * 0.40);
+
+    canvas.drawCircle(leftEyeTop, r * 0.24, frogPaint);
+    canvas.drawCircle(rightEyeTop, r * 0.24, frogPaint);
+
+    canvas.drawCircle(leftEyeTop, r * 0.18, Paint()..color = Colors.white);
+    canvas.drawCircle(rightEyeTop, r * 0.18, Paint()..color = Colors.white);
+
+    // Pupils looking up curiously
+    canvas.drawCircle(Offset(leftEyeTop.dx + 2, leftEyeTop.dy - 3), r * 0.09, Paint()..color = Colors.black);
+    canvas.drawCircle(Offset(rightEyeTop.dx - 2, rightEyeTop.dy - 3), r * 0.09, Paint()..color = Colors.black);
+
+    // Cute Bow Tie
+    _drawBowTie(canvas, Offset(center.dx, center.dy + r * 0.52), r * 0.30, Colors.black87);
+  }
+
+  // 5. Heart Cool (Magenta heart creature wearing sunglasses)
+  void _drawHeartCool(Canvas canvas, Offset center, double r, double time) {
+    final heartPaint = Paint()
+      ..shader = const RadialGradient(
+        colors: [Color(0xFFF43F5E), Color(0xFFE11D48), Color(0xFF9F1239)],
+      ).createShader(Rect.fromCircle(center: center, radius: r * 0.8));
+
+    final path = Path();
+    final d = r * 0.72;
+    path.moveTo(center.dx, center.dy + d * 0.65);
+    path.cubicTo(center.dx + d * 1.1, center.dy - d * 0.2, center.dx + d * 0.6, center.dy - d * 0.95, center.dx, center.dy - d * 0.35);
+    path.cubicTo(center.dx - d * 0.6, center.dy - d * 0.95, center.dx - d * 1.1, center.dy - d * 0.2, center.dx, center.dy + d * 0.65);
+    canvas.drawPath(path, heartPaint);
+
+    // Sunglasses
+    final glassesPaint = Paint()..color = const Color(0xFF0F172A);
+    canvas.drawCircle(Offset(center.dx - r * 0.28, center.dy - r * 0.02), r * 0.18, glassesPaint);
+    canvas.drawCircle(Offset(center.dx + r * 0.28, center.dy - r * 0.02), r * 0.18, glassesPaint);
+    canvas.drawLine(
+      Offset(center.dx - r * 0.12, center.dy - r * 0.02),
+      Offset(center.dx + r * 0.12, center.dy - r * 0.02),
+      Paint()..color = const Color(0xFF0F172A)..strokeWidth = 3,
+    );
+  }
+
+  void _drawBowTie(Canvas canvas, Offset pos, double size, Color color) {
+    final bowPaint = Paint()..color = color;
+    final path = Path()
+      ..moveTo(pos.dx - size / 2, pos.dy - size * 0.35)
+      ..lineTo(pos.dx, pos.dy)
+      ..lineTo(pos.dx - size / 2, pos.dy + size * 0.35)
+      ..close()
+      ..moveTo(pos.dx + size / 2, pos.dy - size * 0.35)
+      ..lineTo(pos.dx, pos.dy)
+      ..lineTo(pos.dx + size / 2, pos.dy + size * 0.35)
+      ..close();
+    canvas.drawPath(path, bowPaint);
+    canvas.drawCircle(pos, size * 0.18, bowPaint);
+  }
+
+  // 6. Minimal GPT Dots
+  void _drawGptDots(Canvas canvas, double cx, double cy, double baseRadius, double time) {
+    const gptColors = [Color(0xFFFFFFFF), Color(0xFF38BDF8), Color(0xFFA855F7), Color(0xFFF43F5E)];
+    const numDots = 4;
+    for (int i = 0; i < numDots; i++) {
+      final baseAngle = (i * (2 * math.pi) / numDots);
+      final orbitRadius = baseRadius * 0.44 + math.sin(time * 2 + i) * (baseRadius * 0.04);
+      final currentAngle = baseAngle + time * 0.8;
+      final x = cx + math.cos(currentAngle) * orbitRadius;
+      final y = cy + math.sin(currentAngle) * orbitRadius;
+      final dotRadius = baseRadius * 0.22;
+      canvas.drawCircle(Offset(x, y), dotRadius, Paint()..color = gptColors[i]);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _GptDotsPainter oldDelegate) {
+  bool shouldRepaint(covariant _CompanionAvatarPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue ||
-        oldDelegate.state != state;
+        oldDelegate.state != state ||
+        oldDelegate.type != type;
   }
 }
