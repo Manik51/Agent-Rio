@@ -10,6 +10,8 @@ import 'task_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../config/feature_flags.dart';
+import '../services/rio_tts_service.dart';
+import '../services/rio_trigger_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final AiService aiService;
@@ -787,7 +789,16 @@ class _SettingsScreenState extends State<SettingsScreen>
             children: [_buildAccessibilityCard()],
           ),
 
-          // 7. System Permissions Card
+          // 7. Agent Rio Voice & Trigger Card
+          _buildSettingsCard(
+            icon: Icons.record_voice_over_outlined,
+            title: 'Agent Rio Voice & Trigger',
+            subtitle: 'Alexa voice synthesis, offline fallback, and wake-word',
+            isDark: isDark,
+            children: [_buildVoiceAndTriggerCard()],
+          ),
+
+          // 8. System Permissions Card
           _buildSettingsCard(
             icon: Icons.security_outlined,
             title: 'App Permissions',
@@ -1070,7 +1081,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                 const SizedBox(height: 12),
                 if (!isRunning) ...[
                   const Text(
-                    'Tap below to open Accessibility Settings, then find "PrivateAgent Screen Control" and enable it.',
+                    'Tap below to open Accessibility Settings, then find "Agent Rio Screen Control" and enable it.',
                     style: TextStyle(fontSize: 13),
                   ),
                   const SizedBox(height: 12),
@@ -1093,6 +1104,61 @@ class _SettingsScreenState extends State<SettingsScreen>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildVoiceAndTriggerCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.record_voice_over, color: Color(0xFF6366F1)),
+                const SizedBox(width: 8),
+                const Text(
+                  'Rio Voice & Trigger Settings',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Online voice uses Alexa/Neural synthesis with natural pitch. Offline automatically uses Android offline TTS.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await RioTtsService().speak(
+                      'Hello! I am Agent Rio, your voice-activated autonomous assistant.',
+                    );
+                  },
+                  icon: const Icon(Icons.volume_up, size: 18),
+                  label: const Text('Test Rio Voice'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await Permission.ignoreBatteryOptimizations.request();
+                    if (mounted) setState(() {});
+                  },
+                  icon: const Icon(Icons.battery_charging_full, size: 18),
+                  label: const Text('Bypass Battery Optimization'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

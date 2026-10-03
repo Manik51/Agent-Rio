@@ -9,6 +9,7 @@ import 'shizuku_service.dart';
 import 'screen_automation_service.dart';
 import 'task_executor.dart';
 import 'ai_service.dart';
+import 'whatsapp_automation_service.dart';
 
 class ActionHandler {
   final AppLauncherService _appLauncher = AppLauncherService();
@@ -58,6 +59,14 @@ class ActionHandler {
             contactName: action.params['contact_name'] as String?,
             phoneNumber: action.params['phone_number'] as String?,
             message: action.params['message'] as String? ?? '',
+          );
+          break;
+
+        case 'whatsapp_voice_call':
+          result = await WhatsappAutomationService().executeVoiceCallHack(
+            contactNameOrPhone: (action.params['contact_name'] as String?) ??
+                (action.params['phone_number'] as String?) ?? '',
+            messageText: (action.params['message'] as String?) ?? '',
           );
           break;
 

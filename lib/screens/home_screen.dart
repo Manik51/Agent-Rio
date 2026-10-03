@@ -245,8 +245,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!await FlutterOverlayWindow.isActive()) {
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        overlayTitle: 'PrivateAgent',
-        overlayContent: 'Performing task...',
+        overlayTitle: 'Agent Rio',
+        overlayContent: 'Rio is standing by...',
         flag: OverlayFlag.focusPointer,
         alignment: OverlayAlignment.centerRight,
         visibility: NotificationVisibility.visibilitySecret,
@@ -435,10 +435,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (await FlutterOverlayWindow.isActive()) return;
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
-        overlayTitle: "PrivateAgent",
+        overlayTitle: "Agent Rio",
         overlayContent: _isLoading
             ? "Performing task..."
-            : "Floating Assistant",
+            : "Agent Rio",
         flag: OverlayFlag.focusPointer,
         alignment: OverlayAlignment.centerRight,
         visibility: NotificationVisibility.visibilitySecret,
@@ -742,7 +742,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   size: 26,
                 ),
                 const SizedBox(width: 12),
-                Text('PrivateAgent', style: headerStyle),
+                Text('Agent Rio', style: headerStyle),
               ],
             ),
           ),

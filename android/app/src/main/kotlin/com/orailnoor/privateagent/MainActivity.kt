@@ -45,6 +45,8 @@ class MainActivity : FlutterActivity() {
     }
 
     companion object {
+        private var mediaPlayer: android.media.MediaPlayer? = null
+
         fun registerAccessibilityChannel(flutterEngine: FlutterEngine, context: android.content.Context) {
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.privateagent/accessibility")
                 .setMethodCallHandler { call, result ->
@@ -213,6 +215,59 @@ class MainActivity : FlutterActivity() {
                                 result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)
                             } else {
                                 result.success(service.openNotifications())
+                            }
+                        }
+
+                        "openQuickSettings" -> {
+                            val service = AgentAccessibilityService.instance
+                            if (service == null) {
+                                result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)
+                            } else {
+                                result.success(service.openQuickSettings())
+                            }
+                        }
+
+                        "lockScreen" -> {
+                            val service = AgentAccessibilityService.instance
+                            if (service == null) {
+                                result.error("SERVICE_NOT_RUNNING", "Accessibility service is not running", null)
+                            } else {
+                                result.success(service.lockScreen())
+                            }
+                        }
+
+                        "playAudioFile" -> {
+                            val filePath = call.argument<String>("path")
+                            if (filePath.isNullOrEmpty()) {
+                                result.error("INVALID_ARGS", "Audio path is required", null)
+                            } else {
+                                try {
+                                    mediaPlayer?.stop()
+                                    mediaPlayer?.release()
+                                    mediaPlayer = android.media.MediaPlayer().apply {
+                                        setDataSource(filePath)
+                                        prepare()
+                                        setOnCompletionListener { mp ->
+                                            mp.release()
+                                            mediaPlayer = null
+                                        }
+                                        start()
+                                    }
+                                    result.success(true)
+                                } catch (e: Exception) {
+                                    result.error("AUDIO_ERROR", e.localizedMessage, null)
+                                }
+                            }
+                        }
+
+                        "stopAudio" -> {
+                            try {
+                                mediaPlayer?.stop()
+                                mediaPlayer?.release()
+                                mediaPlayer = null
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.success(false)
                             }
                         }
 

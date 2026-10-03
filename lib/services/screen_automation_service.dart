@@ -340,6 +340,42 @@ class ScreenAutomationService {
     }
   }
 
+  /// Open quick settings panel
+  Future<bool> openQuickSettings() async {
+    try {
+      return await _channel.invokeMethod<bool>('openQuickSettings') ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Lock screen / sleep device
+  Future<bool> lockScreen() async {
+    try {
+      return await _channel.invokeMethod<bool>('lockScreen') ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Play an audio file natively via Android MediaPlayer
+  Future<bool> playAudioFile(String path) async {
+    try {
+      return await _channel.invokeMethod<bool>('playAudioFile', {'path': path}) ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Stop native audio playback
+  Future<bool> stopAudio() async {
+    try {
+      return await _channel.invokeMethod<bool>('stopAudio') ?? false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /// Get current foreground app package name
   Future<String?> getCurrentPackage() async {
     try {

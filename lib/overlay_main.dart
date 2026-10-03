@@ -15,6 +15,8 @@ import 'services/shizuku_service.dart';
 import 'services/chat_history_service.dart';
 import 'models/chat_message.dart';
 import 'widgets/message_bubble.dart';
+import 'widgets/rio_avatar_widget.dart';
+import 'services/rio_trigger_service.dart';
 
 class OverlayApp extends StatefulWidget {
   const OverlayApp({super.key});
@@ -31,6 +33,8 @@ class _OverlayAppState extends State<OverlayApp> {
   bool _isListening = false;
   final stt.SpeechToText _speech = stt.SpeechToText();
   final List<ChatMessage> _messages = [];
+  RioAvatarState _avatarState = RioAvatarState.idle;
+  final RioTriggerService _triggerService = RioTriggerService();
 
   late final AiService _aiService;
   late final ScreenAutomationService _screenService;
@@ -45,6 +49,14 @@ class _OverlayAppState extends State<OverlayApp> {
   void initState() {
     super.initState();
     _speech.initialize();
+    _triggerService.onStateChanged = (state) {
+      if (mounted) {
+        setState(() {
+          _avatarState = state;
+        });
+      }
+    };
+    _triggerService.initSpeech();
 
     _aiService = AiService();
     _screenService = ScreenAutomationService();
@@ -355,26 +367,15 @@ class _OverlayAppState extends State<OverlayApp> {
 
   Widget _buildContent() {
     if (!_isExpanded) {
-      return GestureDetector(
-        onTap: _toggleExpanded,
-        child: SizedBox.expand(
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.25),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(4),
-            child: ClipOval(
-              child: Image.asset('assets/app-logo.png', fit: BoxFit.cover),
-            ),
+      return SizedBox.expand(
+        child: Center(
+          child: RioAvatarWidget(
+            state: _avatarState,
+            onTap: () {
+              _triggerService.handleAvatarTap();
+            },
+            onDoubleTap: _toggleExpanded,
+            size: 56.0,
           ),
         ),
       );

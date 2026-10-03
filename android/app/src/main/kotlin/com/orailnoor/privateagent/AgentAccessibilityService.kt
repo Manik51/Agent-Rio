@@ -461,6 +461,20 @@ class AgentAccessibilityService : AccessibilityService() {
         return performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
     }
 
+    /** Open quick settings */
+    fun openQuickSettings(): Boolean {
+        return performGlobalAction(GLOBAL_ACTION_QUICK_SETTINGS)
+    }
+
+    /** Lock screen / put phone to sleep */
+    fun lockScreen(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN)
+        } else {
+            false
+        }
+    }
+
     /** Swipe gesture */
     fun swipe(startX: Float, startY: Float, endX: Float, endY: Float, durationMs: Long = 300): Boolean {
         val path = Path()
