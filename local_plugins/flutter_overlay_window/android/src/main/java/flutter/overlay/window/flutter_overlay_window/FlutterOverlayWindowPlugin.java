@@ -78,8 +78,8 @@ public class FlutterOverlayWindowPlugin implements
                 } else {
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     context.startActivity(intent);
+                    result.success(checkOverlayPermission());
                 }
-                result.success(checkOverlayPermission());
             } else {
                 result.success(true);
             }

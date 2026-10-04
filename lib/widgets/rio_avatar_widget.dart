@@ -241,9 +241,6 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
           'assets/Rio.riv',
           fit: BoxFit.contain,
           onInit: _onRiveInit,
-          onError: (e) {
-            if (mounted) setState(() => _hasError = true);
-          },
           placeHolder: Center(
             child: SizedBox(
               width: widget.size * 0.4,

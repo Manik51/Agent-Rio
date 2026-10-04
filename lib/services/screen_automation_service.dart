@@ -51,6 +51,9 @@ class ScreenAutomationService {
     }
   }
 
+  /// Alias for isServiceRunning
+  Future<bool> isAccessibilityServiceEnabled() => isServiceRunning();
+
   /// Open Android accessibility settings so user can enable the service
   Future<void> openAccessibilitySettings() async {
     await _channel.invokeMethod('openAccessibilitySettings');

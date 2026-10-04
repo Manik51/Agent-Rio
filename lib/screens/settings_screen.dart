@@ -90,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     final wake = prefs.getBool('rio_wake_word') ?? false;
 
     final overlayGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
-    final accessActive = await widget.screenAutomationService.isAccessibilityServiceEnabled();
+    final accessActive = await widget.screenAutomationService.isServiceRunning();
 
     if (mounted) {
       setState(() {
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   Future<void> _checkPermissions() async {
     final overlayGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
-    final accessActive = await widget.screenAutomationService.isAccessibilityServiceEnabled();
+    final accessActive = await widget.screenAutomationService.isServiceRunning();
 
     final perms = {
       'Microphone': Permission.microphone,
