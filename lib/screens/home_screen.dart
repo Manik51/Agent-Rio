@@ -582,25 +582,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF6366F1), Color(0xFF38BDF8)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.4),
-                    blurRadius: 8,
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.smart_toy_rounded,
-                size: 16,
-                color: Colors.white,
-              ),
+            RioAvatarWidget(
+              state: _rioState,
+              size: 28,
+              onTap: _toggleVoice,
             ),
             const SizedBox(width: 8),
             ShaderMask(
@@ -1290,10 +1275,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       child: Row(
         children: [
-          RioAvatarWidget(
-            state: _rioState,
-            size: 42,
-            onTap: _toggleVoice,
+          Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xFF38BDF8).withOpacity(0.6),
+                width: 1.5,
+              ),
+            ),
+            child: RioAvatarWidget(
+              state: _rioState,
+              size: 46,
+              onTap: _toggleVoice,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1301,11 +1296,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
+                Text(
                   'Agent Rio Companion',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 2),

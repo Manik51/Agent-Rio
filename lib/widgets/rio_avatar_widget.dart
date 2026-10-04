@@ -135,7 +135,8 @@ class _RioRiveAvatarWidget extends StatefulWidget {
   State<_RioRiveAvatarWidget> createState() => _RioRiveAvatarWidgetState();
 }
 
-class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
+class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget>
+    with SingleTickerProviderStateMixin {
   SMIBool? _typingInput;
   SMIBool? _loadingInput;
   SMITrigger? _correctInput;
@@ -143,6 +144,22 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
   SMITrigger? _jumpInput;
   bool _isLoaded = false;
   bool _hasError = false;
+  late AnimationController _fallbackAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _fallbackAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _fallbackAnim.dispose();
+    super.dispose();
+  }
 
   void _onRiveInit(Artboard artboard) {
     try {
@@ -162,7 +179,8 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
         if (mounted) setState(() => _isLoaded = true);
         _syncState(widget.state);
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Error attaching Rive controller: $e');
       if (mounted) setState(() => _hasError = true);
     }
   }
@@ -206,32 +224,27 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    // Safety check: if Rive asset does not load within 1200ms, smoothly fallback to official AI Orb mascot
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (mounted && !_isLoaded && !_hasError) {
-        setState(() => _hasError = true);
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     if (_hasError) {
-      // Graceful fallback to glowing official AI Orb Mascot
+      // Graceful fallback to glowing animated official AI Orb Mascot
       return GestureDetector(
         onTap: widget.onTap,
         onDoubleTap: widget.onDoubleTap,
         child: SizedBox(
           width: widget.size,
           height: widget.size,
-          child: CustomPaint(
-            painter: _CompanionAvatarPainter(
-              animationValue: 0.5,
-              state: widget.state,
-              type: RioAvatarType.rioOfficial,
-            ),
+          child: AnimatedBuilder(
+            animation: _fallbackAnim,
+            builder: (context, _) {
+              return CustomPaint(
+                size: Size(widget.size, widget.size),
+                painter: _CompanionAvatarPainter(
+                  animationValue: _fallbackAnim.value,
+                  state: widget.state,
+                  type: RioAvatarType.rioOfficial,
+                ),
+              );
+            },
           ),
         ),
       );
@@ -250,15 +263,31 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget> {
         height: widget.size,
         child: RiveAnimation.asset(
           'assets/Rio.riv',
+          artboard: 'Root',
+          stateMachines: const ['State Machine 1'],
+          animations: const ['Idle'],
           fit: BoxFit.contain,
           onInit: _onRiveInit,
+          onError: (err) {
+            debugPrint('Rive load error: $err');
+            if (mounted) setState(() => _hasError = true);
+          },
           placeHolder: Center(
             child: SizedBox(
-              width: widget.size * 0.4,
-              height: widget.size * 0.4,
-              child: const CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Color(0xFF6366F1),
+              width: widget.size,
+              height: widget.size,
+              child: AnimatedBuilder(
+                animation: _fallbackAnim,
+                builder: (context, _) {
+                  return CustomPaint(
+                    size: Size(widget.size, widget.size),
+                    painter: _CompanionAvatarPainter(
+                      animationValue: _fallbackAnim.value,
+                      state: widget.state,
+                      type: RioAvatarType.rioOfficial,
+                    ),
+                  );
+                },
               ),
             ),
           ),

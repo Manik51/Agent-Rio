@@ -133,7 +133,9 @@ public class OverlayService extends Service implements View.OnTouchListener {
         Log.d("onStartCommand", "Service started");
         FlutterEngine engine = FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG);
         engine.getLifecycleChannel().appIsResumed();
-        flutterView = new FlutterView(getApplicationContext(), new FlutterTextureView(getApplicationContext()));
+        FlutterTextureView textureView = new FlutterTextureView(this);
+        textureView.setOpaque(false);
+        flutterView = new FlutterView(this, textureView);
         flutterView.attachToFlutterEngine(FlutterEngineCache.getInstance().get(OverlayConstants.CACHED_TAG));
         flutterView.setFitsSystemWindows(true);
         flutterView.setFocusable(true);
@@ -327,6 +329,13 @@ public class OverlayService extends Service implements View.OnTouchListener {
             );  // "overlayMain" is custom entry point
 
             flutterEngine = engineGroup.createAndRunEngine(this, entryPoint);
+            try {
+                Class<?> registerClass = Class.forName("io.flutter.plugins.GeneratedPluginRegistrant");
+                java.lang.reflect.Method method = registerClass.getDeclaredMethod("registerWith", FlutterEngine.class);
+                method.invoke(null, flutterEngine);
+            } catch (Exception e) {
+                Log.e("OverlayService", "Could not register plugins with overlay engine: " + e);
+            }
 
             // Cache the created FlutterEngine for future use
             FlutterEngineCache.getInstance().put(OverlayConstants.CACHED_TAG, flutterEngine);

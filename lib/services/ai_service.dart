@@ -328,22 +328,55 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
         ..._conversationHistory,
       ];
 
-      String requestUrl = _baseUrl;
-      if (requestUrl.endsWith('/chat/completions')) {
-        requestUrl = requestUrl; // User already included it
-      } else {
-        if (requestUrl.endsWith('/')) {
-          requestUrl = '${requestUrl}chat/completions';
-        } else {
-          requestUrl = '$requestUrl/chat/completions';
-        }
-      }
+  String _buildChatCompletionsUrl() {
+    final cleanKey = (_apiKey ?? '').trim();
+    final cleanBase = _baseUrl.trim();
+    final isGemini = cleanBase.contains('generativelanguage.googleapis.com') ||
+        cleanKey.startsWith('AIzaSy');
+
+    if (isGemini) {
+      // Google Gemini OpenAI-compatible endpoint is strictly at:
+      // https://generativelanguage.googleapis.com/v1beta/openai/chat/completions
+      // Appending ?key= ensures it works even if proxies or headers differ.
+      return 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=$cleanKey';
+    }
+
+    String url = cleanBase;
+    if (url.endsWith('/chat/completions')) {
+      return url;
+    }
+    while (url.endsWith('/')) {
+      url = url.substring(0, url.length - 1);
+    }
+    return '$url/chat/completions';
+  }
+
+  String _cleanModelName(String model) {
+    String m = model.trim();
+    if (m.startsWith('models/')) {
+      m = m.replaceFirst('models/', '');
+    }
+    return m;
+  }
+
+  /// Send a chat completion request to the OpenAI-compatible API.
+  Future<String> sendChatCompletion(
+    List<Map<String, dynamic>> messages, {
+    int? maxTokens,
+  }) async {
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      throw Exception('API Key is not configured. Please go to Settings.');
+    }
+
+    try {
+      final requestUrl = _buildChatCompletionsUrl();
+      final modelName = _cleanModelName(_model);
 
       final requestBody = jsonEncode({
-        'model': _model,
+        'model': modelName,
         'messages': messages,
         'temperature': _temperature,
-        'max_tokens': _effectiveMaxTokens,
+        'max_tokens': maxTokens ?? _effectiveMaxTokens,
       });
 
       developer.log(
@@ -356,7 +389,7 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
             Uri.parse(requestUrl),
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': 'Bearer $_apiKey',
+              'Authorization': 'Bearer ${_apiKey?.trim()}',
               'HTTP-Referer': 'https://github.com/agent-rio',
               'X-Title': 'Agent Rio',
             },
@@ -440,28 +473,20 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
         ..._conversationHistory,
       ];
 
-      String requestUrl = _baseUrl;
-      if (requestUrl.endsWith('/chat/completions')) {
-        requestUrl = requestUrl;
-      } else {
-        if (requestUrl.endsWith('/')) {
-          requestUrl = '${requestUrl}chat/completions';
-        } else {
-          requestUrl = '$requestUrl/chat/completions';
-        }
-      }
+      final requestUrl = _buildChatCompletionsUrl();
+      final modelName = _cleanModelName(_model);
 
       final client = http.Client();
       final request = http.Request('POST', Uri.parse(requestUrl));
       request.headers.addAll({
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
+        'Authorization': 'Bearer ${_apiKey?.trim()}',
         'HTTP-Referer': 'https://github.com/agent-rio',
         'X-Title': 'Agent Rio',
       });
 
       request.body = jsonEncode({
-        'model': _model,
+        'model': modelName,
         'messages': messages,
         'temperature': _temperature,
         'max_tokens': _effectiveMaxTokens,
@@ -584,26 +609,20 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
           {'role': 'user', 'content': prompt},
         ];
 
-        String requestUrl = _baseUrl;
-        if (!requestUrl.endsWith('/chat/completions')) {
-          if (requestUrl.endsWith('/')) {
-            requestUrl = '${requestUrl}chat/completions';
-          } else {
-            requestUrl = '$requestUrl/chat/completions';
-          }
-        }
+        final requestUrl = _buildChatCompletionsUrl();
+        final modelName = _cleanModelName(_model);
 
         final response = await http
             .post(
               Uri.parse(requestUrl),
               headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer $_apiKey',
+                'Authorization': 'Bearer ${_apiKey?.trim()}',
                 'HTTP-Referer': 'https://github.com/agent-rio',
                 'X-Title': 'Agent Rio',
               },
               body: jsonEncode({
-                'model': _model,
+                'model': modelName,
                 'messages': messages,
                 'temperature': _temperature,
                 'max_tokens': _effectiveMaxTokens,

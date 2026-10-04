@@ -390,15 +390,39 @@ class _OverlayAppState extends State<OverlayApp> {
 
   Widget _buildContent() {
     if (!_isExpanded) {
+      final double avatarSz = _floatingSize.toDouble();
       return SizedBox.expand(
         child: Center(
-          child: RioAvatarWidget(
-            state: _avatarState,
-            onTap: () {
-              _triggerService.handleAvatarTap();
-            },
-            onDoubleTap: _toggleExpanded,
-            size: _floatingSize.toDouble(),
+          child: Container(
+            width: avatarSz,
+            height: avatarSz,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF0B0F19).withOpacity(0.92),
+              border: Border.all(
+                color: const Color(0xFF38BDF8),
+                width: 2.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF6366F1).withOpacity(0.65),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipOval(
+              child: Center(
+                child: RioAvatarWidget(
+                  state: _avatarState,
+                  onTap: () {
+                    _triggerService.handleAvatarTap();
+                  },
+                  onDoubleTap: _toggleExpanded,
+                  size: avatarSz - 6,
+                ),
+              ),
+            ),
           ),
         ),
       );

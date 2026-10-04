@@ -164,6 +164,13 @@ public class FlutterOverlayWindowPlugin implements
                     FlutterInjector.instance().flutterLoader().findAppBundlePath(),
                     "overlayMain");
             FlutterEngine engine = enn.createAndRunEngine(context, dEntry);
+            try {
+                Class<?> registerClass = Class.forName("io.flutter.plugins.GeneratedPluginRegistrant");
+                java.lang.reflect.Method method = registerClass.getDeclaredMethod("registerWith", FlutterEngine.class);
+                method.invoke(null, engine);
+            } catch (Exception e) {
+                Log.e("OverlayPlugin", "Could not register plugins with overlay engine: " + e);
+            }
             FlutterEngineCache.getInstance().put(OverlayConstants.CACHED_TAG, engine);
         }
     }
