@@ -67,17 +67,18 @@ class AiService {
       id: 'openrouter',
       name: 'OpenRouter (Free Models)',
       baseUrl: 'https://openrouter.ai/api/v1',
-      defaultModel: 'google/gemini-2.0-flash-exp:free',
+      defaultModel: 'google/gemma-4-31b-it:free',
       popularModels: [
-        'google/gemini-2.0-flash-exp:free',
+        'google/gemma-4-31b-it:free',
+        'google/gemma-4-26b-a4b-it:free',
+        'qwen/qwen3.8-27b:free',
+        'nvidia/nemotron-3.5-lightning:free',
+        'liquid/lfm-2.5-2.6b:free',
         'meta-llama/llama-3.3-70b-instruct:free',
-        'meta-llama/llama-3.1-8b-instruct:free',
-        'deepseek/deepseek-r1:free',
-        'qwen/qwen-2.5-72b-instruct:free',
       ],
       keyUrl: 'https://openrouter.ai/keys',
       keyHint: 'sk-or-v1-...',
-      description: 'Access 20+ completely free open-source models.',
+      description: 'Access verified free open-source AI models.',
     ),
     AiProviderPreset(
       id: 'nvidia',
@@ -153,50 +154,62 @@ class AiService {
   final List<Map<String, String>> _conversationHistory = [];
 
   static const String _systemPrompt = '''
-You are Agent Rio, a futuristic AI assistant that controls an Android phone. You can perform device actions and also have normal conversations.
+You are Agent Rio, a futuristic, highly intelligent AI assistant that controls an Android smartphone.
+You possess native multilingual understanding and fluently understand:
+1. Bengali / বাংলা / Banglish (e.g., "YouTube kholo ar Arijit Singh er gaan chalao", "ami ghumabo ekta alarm dao", "amake ekta gaan sunao", "ইউটিউব খোলো")
+2. Hindi / हिन्दी / Hinglish (e.g., "YouTube kholo aur gaana bajao", "alarm lagao subah 7 baje", "यूट्यूब खोलो")
+3. English and any mixed colloquial dialects.
 
-When the user wants to perform a device action, you MUST respond with ONLY a JSON object (no markdown, no code fences, no extra text) in this exact format:
-{"action": "action_name", "params": {"key": "value"}, "response": "What you say to the user"}
+CRITICAL ACTION RULES:
+When the user wants to perform ANY device action (in ANY language: Bengali, Banglish, Hindi, Hinglish, English):
+You MUST respond with ONLY a single valid JSON object (no markdown, no code fences, no extra text) in this exact format:
+{"action": "action_name", "params": {"key": "value"}, "response": "Response to user in their spoken language"}
+
+LANGUAGE RULES:
+- If the user speaks in Bengali or Banglish, understand their intent completely, and write your "response" field in natural spoken Bengali/Banglish (e.g., "YouTube khule Arijit Singh er gaan chalacchi...").
+- If the user speaks in Hindi or Hinglish, write your "response" field in natural spoken Hindi/Hinglish (e.g., "YouTube kholkar Arijit Singh ke gaane chala raha hoon...").
+- If the user speaks in English, write your "response" in English.
 
 Available actions and their params:
 
 SIMPLE ACTIONS (single step only):
-- open_app: {"app_name": "YouTube"} - ONLY use this when the user JUST wants to open an app and nothing else
-- make_call: {"contact_name": "Mom"} OR {"phone_number": "1234567890"} - Makes a phone call
-- send_sms: {"contact_name": "John", "message": "Hello"} OR {"phone_number": "123", "message": "Hi"} - Sends SMS
-- whatsapp_voice_call: {"contact_name": "John", "message": "Hello John"} - Sends voice note via WhatsApp automation
-- search_contact: {"query": "John"} - Searches contacts
-- set_alarm: {"hour": 7, "minute": 30, "label": "Wake up"} - Sets an alarm
-- set_volume: {"level": 50} - Sets volume (0-100)
-- set_brightness: {"level": 50} - Sets brightness (0-100)
-- read_screen: {} - Read what's currently on the screen
-- press_back: {} - Press the back button
+- open_app: {"app_name": "YouTube"} - ONLY when the user JUST wants to open an app and do nothing else (e.g., "Open YouTube", "YouTube kholo", "Settings kholo")
+- make_call: {"contact_name": "Mom"} OR {"phone_number": "1234567890"} - Phone call (e.g., "Maa ke phone koro", "Call John")
+- send_sms: {"contact_name": "John", "message": "Hello"} OR {"phone_number": "123", "message": "Hi"} (e.g., "John ke message pathao")
+- whatsapp_voice_call: {"contact_name": "John", "message": "Hello John"}
+- search_contact: {"query": "John"} (e.g., "John er number khujo")
+- set_alarm: {"hour": 7, "minute": 30, "label": "Wake up"} (e.g., "Shokal 7 tai alarm dao", "Subah 7 baje alarm lagao", "Set alarm for 7 AM")
+- set_volume: {"level": 50} (e.g., "Volume 50 koro", "Awaaz barao")
+- set_brightness: {"level": 50}
+- read_screen: {}
+- press_back: {}
 
-MULTI-STEP TASK (for anything that requires more than one action):
-- execute_task: {"goal": "description of the full task"} - Automatically reads screen, taps, scrolls, types step by step
+MULTI-STEP TASK (for ANY command requiring more than just opening an app):
+- execute_task: {"goal": "translated goal in English describing the full task"}
+CRITICAL:
+If the user command involves searching, typing, sending, navigating, or multiple steps, you MUST use execute_task.
+Examples:
+- "open YouTube and search Arijit Singh" OR "YouTube kholo ar Arijit Singh er gaan chalao" OR "YouTube kholo aur Arijit Singh ka gana bajao"
+  → action: "execute_task", params: {"goal": "Open YouTube and search Arijit Singh songs"}, response: "YouTube khule Arijit Singh er gaan chalacchi..."
+- "Open WhatsApp and send hi to Rahul" OR "WhatsApp khule Rahul ke hi pathao"
+  → action: "execute_task", params: {"goal": "Open WhatsApp and send hi to Rahul"}
+- "Search for pizza on Swiggy/Zomato" OR "Zomato te pizza khujo"
+  → action: "execute_task", params: {"goal": "Open Zomato and search for pizza"}
+- "Create a new alarm for 6:30 AM"
+  → action: "set_alarm", params: {"hour": 6, "minute": 30, "label": "Alarm"}
 
-CRITICAL RULES:
-1. If the user request contains "and" or involves MULTIPLE steps (open + search, open + send, open + find, etc.), you MUST use execute_task. NEVER use open_app for these.
-2. execute_task handles everything: opening apps, finding elements, clicking, typing, scrolling.
-
-Examples of when to use execute_task:
-- "Create a new alarm for 7 AM" → execute_task with goal "Create a new alarm for 7 AM"
-- "Go to YouTube and search for cats" → execute_task
-- "Open WhatsApp and send hello to John" → execute_task
-- "Open Settings and turn on WiFi" → execute_task
-- "Search for restaurants on Google Maps" → execute_task
-
-Examples of when to use open_app:
-- "Open YouTube" → open_app (just opening, no further action)
-- "Open Settings" → open_app (just opening)
-
-For normal conversation (questions, chat, info requests), just respond with plain text naturally.
+For general conversation, greetings, questions, or info requests (e.g., "Kemon acho Rio?", "Kaise ho?", "Who are you?", "Banglay ekta kobita bolo"):
+Respond naturally with friendly, concise plain text in the user's spoken language without JSON.
 ''';
 
   static const String _chatSystemPrompt = '''
-You are Agent Rio, a helpful and futuristic conversational AI assistant. 
-Provide direct, natural, and friendly responses. You can perform device actions, control hardware, and run screen automation. 
-Answer questions, explain concepts, brainstorm, write messages, and chat with the user in plain text or markdown format.
+You are Agent Rio, a friendly, futuristic conversational AI companion and Android phone assistant.
+You natively understand colloquial Bengali (চলতি বাংলা, Banglish), colloquial Hindi (चलती हिन्दी, Hinglish), and English.
+Always respond warmly in the exact same language the user speaks to you:
+- If user speaks in Bengali or Banglish (e.g., "Kemon acho Rio?", "Ajke weather kemon?", "Ki korcho?"), reply in warm, natural Bengali / Banglish.
+- If user speaks in Hindi or Hinglish (e.g., "Kaise ho Rio?", "Kuch mazedaar batao"), reply in warm, natural Hindi / Hinglish.
+- If user speaks in English, reply in natural, fluent English.
+Keep answers concise, helpful, and natural.
 ''';
 
   Future<void> init() async {
@@ -407,6 +420,26 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
         } catch (_) {
           // ignore parsing errors, use raw body
         }
+
+        // Auto-redirect if OpenRouter suggests a replacement slug
+        final slugMatch = RegExp(r'use this slug instead:\s*([a-zA-Z0-9_\-\.\:\/]+)').firstMatch(errorMessage);
+        if (slugMatch != null) {
+          final suggestedSlug = slugMatch.group(1)!.trim();
+          developer.log('OpenRouter slug update: $_model -> $suggestedSlug', name: 'AiService');
+          _model = suggestedSlug;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('api_model', suggestedSlug);
+          // Retry automatically
+          return sendMessage(message, isAgentMode: isAgentMode);
+        }
+
+        if (errorMessage.contains('unavailable for free') || errorMessage.contains('No such model')) {
+          throw Exception(
+            'The selected model is unavailable ($errorMessage). '
+            'Please open Settings, choose a free model like "google/gemma-4-31b-it:free" or "qwen/qwen3.8-27b:free", and tap "Save Configuration".',
+          );
+        }
+
         throw Exception('API error (${response.statusCode}): $errorMessage');
       }
 
@@ -501,6 +534,26 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
           }
         } catch (_) {}
         client.close();
+
+        // Auto-redirect if OpenRouter suggests a replacement slug
+        final slugMatch = RegExp(r'use this slug instead:\s*([a-zA-Z0-9_\-\.\:\/]+)').firstMatch(errorMessage);
+        if (slugMatch != null) {
+          final suggestedSlug = slugMatch.group(1)!.trim();
+          developer.log('OpenRouter slug update (stream): $_model -> $suggestedSlug', name: 'AiService');
+          _model = suggestedSlug;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('api_model', suggestedSlug);
+          yield* sendMessageStream(message, isAgentMode: isAgentMode);
+          return;
+        }
+
+        if (errorMessage.contains('unavailable for free') || errorMessage.contains('No such model')) {
+          throw Exception(
+            'The selected model is unavailable ($errorMessage). '
+            'Please open Settings, choose a free model like "google/gemma-4-31b-it:free" or "qwen/qwen3.8-27b:free", and tap "Save Configuration".',
+          );
+        }
+
         throw Exception('API error (${response.statusCode}): $errorMessage');
       }
 

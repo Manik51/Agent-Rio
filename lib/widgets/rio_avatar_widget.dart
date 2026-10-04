@@ -263,9 +263,6 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget>
         height: widget.size,
         child: RiveAnimation.asset(
           'assets/Rio.riv',
-          artboard: 'Root',
-          stateMachines: const ['State Machine 1'],
-          animations: const ['Idle'],
           fit: BoxFit.contain,
           onInit: _onRiveInit,
           placeHolder: Center(
@@ -366,127 +363,154 @@ class _CompanionAvatarPainter extends CustomPainter {
     }
   }
 
-  // Official Rio AI Orb Mascot (Glowing Cybernetic Energy Core with Expressive LED Eyes)
+  // Official Rio AI Orb Mascot (Vibrant Circular Rainbow Halo with Obsidian Core & Twin Pill Eyes)
+  // Perfectly matching the user's authentic asset (media_1791128528498.jpg)
   void _drawRioOfficial(Canvas canvas, Offset center, double r, double time) {
-    // 1. Outer Cosmic Glow
-    final auraPaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF6366F1).withOpacity(0.55),
-          const Color(0xFF38BDF8).withOpacity(0.25),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.65, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: r * 0.98));
-    canvas.drawCircle(center, r * 0.98, auraPaint);
+    // 1. Rainbow Halo Colors
+    final rainbowColors = const [
+      Color(0xFFFF5A1F), // Neon Orange (top-left)
+      Color(0xFFE02497), // Hot Pink / Magenta (top)
+      Color(0xFF7E22CE), // Purple / Violet (top-right)
+      Color(0xFF2563EB), // Royal Blue (right)
+      Color(0xFF00D2FF), // Bright Cyan (bottom-right)
+      Color(0xFF00E5FF), // Electric Cyan (bottom)
+      Color(0xFF9D1DF2), // Purple-Pink (bottom-left)
+      Color(0xFFFF4D2D), // Red-Orange (left)
+      Color(0xFFFF5A1F), // Orange (completes 360 loop)
+    ];
 
-    // 2. Rotating Cyber Orbit Rings
-    final orbitPaint = Paint()
-      ..color = const Color(0xFF38BDF8).withOpacity(0.85)
+    // Smooth subtle rotation when active/working
+    final rotationAngle = (state == RioAvatarState.working) ? time * 1.6 : 0.0;
+    final baseAngle = -math.pi * 0.75 + rotationAngle;
+
+    // Outer Radiant Glow
+    final glowRadius = r * 0.82;
+    final glowPaint = Paint()
+      ..shader = SweepGradient(
+        colors: rainbowColors,
+        startAngle: 0.0,
+        endAngle: math.pi * 2,
+        transform: GradientRotation(baseAngle),
+      ).createShader(Rect.fromCircle(center: center, radius: glowRadius))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: r * 0.84),
-      time * 1.5,
-      math.pi * 0.9,
-      false,
-      orbitPaint,
-    );
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: r * 0.84),
-      time * 1.5 + math.pi,
-      math.pi * 0.9,
-      false,
-      orbitPaint,
-    );
+      ..strokeWidth = r * 0.24
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.16);
 
-    // 3. Spherical Metallic Core
-    final spherePaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.35, -0.4),
-        colors: const [
-          Color(0xFF38BDF8),
-          Color(0xFF6366F1),
-          Color(0xFF1E1B4B),
-          Color(0xFF070A13),
-        ],
-        stops: const [0.0, 0.25, 0.70, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: r * 0.68));
-    canvas.drawCircle(center, r * 0.68, spherePaint);
+    final glowPulse = (state == RioAvatarState.listening)
+        ? (0.75 + 0.25 * math.sin(time * 5).abs())
+        : 0.70;
+    glowPaint.color = Colors.white.withOpacity(glowPulse);
+    canvas.drawCircle(center, glowRadius, glowPaint);
 
-    // 4. Subtle Inner Rim
-    final rimPaint = Paint()
-      ..color = const Color(0xFF818CF8).withOpacity(0.35)
+    // 2. Crisp, Thick Rainbow Gradient Ring
+    final ringRadius = r * 0.79;
+    final ringPaint = Paint()
+      ..shader = SweepGradient(
+        colors: rainbowColors,
+        startAngle: 0.0,
+        endAngle: math.pi * 2,
+        transform: GradientRotation(baseAngle),
+      ).createShader(Rect.fromCircle(center: center, radius: ringRadius))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawCircle(center, r * 0.66, rimPaint);
+      ..strokeWidth = r * 0.26
+      ..strokeCap = StrokeCap.butt;
+    canvas.drawCircle(center, ringRadius, ringPaint);
 
-    // 5. Expressive LED Eyes
-    final eyeBlink = (math.sin(time * 3) > 0.95) ? 0.15 : 1.0;
-    final eyeGlow = Paint()
-      ..color = (state == RioAvatarState.error)
-          ? Colors.redAccent
-          : ((state == RioAvatarState.working)
-              ? const Color(0xFFF59E0B)
-              : const Color(0xFF38BDF8))
+    // 3. Deep Obsidian Midnight Core Circle
+    final corePaint = Paint()
+      ..color = const Color(0xFF131620)
       ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, r * 0.65, corePaint);
 
-    final eyeHeight = r * 0.22 * eyeBlink;
-    final eyeWidth = r * 0.14;
-    final eyeY = center.dy - r * 0.05;
+    // 4. Subtle Inner Rim Depth Shadow
+    final innerRimPaint = Paint()
+      ..color = Colors.black.withOpacity(0.35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = r * 0.035;
+    canvas.drawCircle(center, r * 0.64, innerRimPaint);
 
-    // Left Eye
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(center.dx - r * 0.22, eyeY),
-          width: eyeWidth,
-          height: eyeHeight,
-        ),
-        Radius.circular(eyeWidth / 2),
-      ),
-      eyeGlow,
-    );
+    // 5. Iconic Twin White Vertical Pill Eyes (..)
+    final blinkSin = math.sin(time * 2.8);
+    final isBlinking = blinkSin > 0.94;
+    final blinkFactor = isBlinking ? (1.0 - (blinkSin - 0.94) / 0.06).clamp(0.12, 1.0) : 1.0;
 
-    // Right Eye
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(
-          center: Offset(center.dx + r * 0.22, eyeY),
-          width: eyeWidth,
-          height: eyeHeight,
-        ),
-        Radius.circular(eyeWidth / 2),
-      ),
-      eyeGlow,
-    );
+    final eyeWidth = r * 0.20;
+    final baseEyeHeight = r * 0.30;
+    final eyeY = center.dy - r * 0.03;
+    final eyeSpacing = r * 0.32;
 
-    // 6. Eye Pupils
-    if (eyeBlink > 0.5) {
-      final pupilPaint = Paint()..color = Colors.white;
-      canvas.drawCircle(
-        Offset(center.dx - r * 0.24, eyeY - eyeHeight * 0.2),
-        eyeWidth * 0.25,
-        pupilPaint,
+    final leftEyeCenter = Offset(center.dx - eyeSpacing / 2, eyeY);
+    final rightEyeCenter = Offset(center.dx + eyeSpacing / 2, eyeY);
+
+    if (state == RioAvatarState.success) {
+      // Cheerful upside-down arcs on success (^ ^)
+      final happyPaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.055
+        ..strokeCap = StrokeCap.round;
+
+      final arcRadius = r * 0.09;
+      canvas.drawArc(
+        Rect.fromCircle(center: leftEyeCenter, radius: arcRadius),
+        math.pi * 1.15,
+        math.pi * 0.7,
+        false,
+        happyPaint,
       );
-      canvas.drawCircle(
-        Offset(center.dx + r * 0.20, eyeY - eyeHeight * 0.2),
-        eyeWidth * 0.25,
-        pupilPaint,
+      canvas.drawArc(
+        Rect.fromCircle(center: rightEyeCenter, radius: arcRadius),
+        math.pi * 1.15,
+        math.pi * 0.7,
+        false,
+        happyPaint,
+      );
+    } else {
+      // Clean Pill Eyes with subtle vertical shading
+      final eyePaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: (state == RioAvatarState.error)
+              ? const [Color(0xFFFFA4A4), Color(0xFFFF4848)]
+              : const [Color(0xFFFFFFFF), Color(0xFFE2E8F0)],
+        ).createShader(Rect.fromCenter(
+          center: center,
+          width: r,
+          height: r,
+        ))
+        ..style = PaintingStyle.fill;
+
+      final currentHeight = (state == RioAvatarState.listening)
+          ? (baseEyeHeight * 1.08)
+          : (baseEyeHeight * blinkFactor);
+
+      // Left Pill Eye
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: leftEyeCenter,
+            width: eyeWidth,
+            height: currentHeight,
+          ),
+          Radius.circular(eyeWidth / 2),
+        ),
+        eyePaint,
+      );
+
+      // Right Pill Eye
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: rightEyeCenter,
+            width: eyeWidth,
+            height: currentHeight,
+          ),
+          Radius.circular(eyeWidth / 2),
+        ),
+        eyePaint,
       );
     }
-
-    // 7. Small friendly digital smile
-    final mouthPaint = Paint()
-      ..color = Colors.white.withOpacity(0.9)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0
-      ..strokeCap = StrokeCap.round;
-    final mouthRect = Rect.fromCircle(
-      center: Offset(center.dx, center.dy + r * 0.16),
-      radius: r * 0.12,
-    );
-    canvas.drawArc(mouthRect, 0.15 * math.pi, 0.7 * math.pi, false, mouthPaint);
   }
 
   // 1. Pink Chill (Pink fuzzy ball with black over-ear headphones)

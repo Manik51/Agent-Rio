@@ -154,6 +154,69 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  Future<void> _saveAndApplyConfiguration() async {
+    final apiKey = _apiKeyController.text.trim();
+    final baseUrl = _baseUrlController.text.trim();
+    final model = _modelController.text.trim();
+
+    if (apiKey.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter an API Key before saving.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('api_key', apiKey);
+    await prefs.setString('api_base_url', baseUrl);
+    await prefs.setString('api_model', model);
+    await prefs.setString('rio_selected_provider', _selectedProviderId);
+
+    await widget.aiService.saveSettings(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+    );
+    await widget.aiService.init();
+
+    // Broadcast update to overlay isolate if active
+    try {
+      if (await FlutterOverlayWindow.isActive() ?? false) {
+        await FlutterOverlayWindow.shareData('CONFIG_UPDATE|');
+      }
+    } catch (_) {}
+
+    if (!mounted) return;
+
+    final providerName = AiService.providers
+        .firstWhere((p) => p.id == _selectedProviderId, orElse: () => AiService.providers.first)
+        .name.split(' ').first;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Configuration Saved! Rio is active with $providerName (${model.isEmpty ? "default" : model}).',
+                style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   void _selectProvider(AiProviderPreset provider) {
     setState(() {
       _selectedProviderId = provider.id;
@@ -684,6 +747,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                   ),
                 ),
               ],
+
+              const SizedBox(height: 18),
+
+              // Prominent Save Configuration Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _saveAndApplyConfiguration,
+                  icon: const Icon(Icons.check_circle_rounded, size: 20, color: Colors.white),
+                  label: const Text(
+                    'Save Configuration',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.5,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    elevation: 4,
+                    shadowColor: const Color(0xFF10B981).withOpacity(0.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
 
