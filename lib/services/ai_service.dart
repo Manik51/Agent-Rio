@@ -306,28 +306,6 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
     return sendMessage(message, isAgentMode: false);
   }
 
-  /// Send a message to the AI and get a response.
-  Future<String> sendMessage(String message, {bool isAgentMode = true}) async {
-    if (_apiKey == null || _apiKey!.isEmpty) {
-      throw Exception('API Key is not configured. Please go to Settings.');
-    }
-
-    // Add ONLY the text to the persistent conversation history to save tokens.
-    _conversationHistory.add({'role': 'user', 'content': message});
-
-    // Keep conversation history manageable (last 20 messages)
-    if (_conversationHistory.length > 20) {
-      _conversationHistory.removeRange(0, _conversationHistory.length - 20);
-    }
-
-    try {
-      // Build the prompt including system instructions
-      final systemPrompt = isAgentMode ? _systemPrompt : _chatSystemPrompt;
-      final messages = [
-        if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
-        ..._conversationHistory,
-      ];
-
   String _buildChatCompletionsUrl() {
     final cleanKey = (_apiKey ?? '').trim();
     final cleanBase = _baseUrl.trim();
@@ -359,16 +337,28 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
     return m;
   }
 
-  /// Send a chat completion request to the OpenAI-compatible API.
-  Future<String> sendChatCompletion(
-    List<Map<String, dynamic>> messages, {
-    int? maxTokens,
-  }) async {
+  /// Send a message to the AI and get a response.
+  Future<String> sendMessage(String message, {bool isAgentMode = true}) async {
     if (_apiKey == null || _apiKey!.isEmpty) {
       throw Exception('API Key is not configured. Please go to Settings.');
     }
 
+    // Add ONLY the text to the persistent conversation history to save tokens.
+    _conversationHistory.add({'role': 'user', 'content': message});
+
+    // Keep conversation history manageable (last 20 messages)
+    if (_conversationHistory.length > 20) {
+      _conversationHistory.removeRange(0, _conversationHistory.length - 20);
+    }
+
     try {
+      // Build the prompt including system instructions
+      final systemPrompt = isAgentMode ? _systemPrompt : _chatSystemPrompt;
+      final messages = [
+        if (_useSystemPrompt) {'role': 'system', 'content': systemPrompt},
+        ..._conversationHistory,
+      ];
+
       final requestUrl = _buildChatCompletionsUrl();
       final modelName = _cleanModelName(_model);
 
@@ -376,7 +366,7 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
         'model': modelName,
         'messages': messages,
         'temperature': _temperature,
-        'max_tokens': maxTokens ?? _effectiveMaxTokens,
+        'max_tokens': _effectiveMaxTokens,
       });
 
       developer.log(
