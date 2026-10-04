@@ -67,14 +67,17 @@ class AiService {
       id: 'openrouter',
       name: 'OpenRouter (Free Models)',
       baseUrl: 'https://openrouter.ai/api/v1',
-      defaultModel: 'google/gemma-4-31b-it:free',
+      defaultModel: 'openrouter/free',
       popularModels: [
-        'google/gemma-4-31b-it:free',
-        'google/gemma-4-26b-a4b-it:free',
-        'qwen/qwen3.8-27b:free',
+        'openrouter/free',
+        'nvidia/nemotron-3-super-120b-a12b:free',
         'nvidia/nemotron-3.5-lightning:free',
+        'qwen/qwen3.8-27b:free',
+        'nvidia/nemotron-3-ultra-550b-a55b:free',
+        'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+        'google/gemma-4-31b-it:free',
+        'cohere/north-mini-code:free',
         'liquid/lfm-2.5-2.6b:free',
-        'meta-llama/llama-3.3-70b-instruct:free',
       ],
       keyUrl: 'https://openrouter.ai/keys',
       keyHint: 'sk-or-v1-...',
@@ -134,6 +137,24 @@ class AiService {
     final uri = Uri.tryParse(baseUrl.trim());
     return uri?.host.toLowerCase() == 'integrate.api.nvidia.com';
   }
+
+  static bool isOpenRouterBaseUrl(String baseUrl) {
+    final uri = Uri.tryParse(baseUrl.trim());
+    return uri?.host.toLowerCase() == 'openrouter.ai';
+  }
+
+  /// High-reliability fallback cascade for OpenRouter free tier
+  static const List<String> openRouterFreeFallbackCascade = [
+    'openrouter/free',
+    'nvidia/nemotron-3.5-lightning:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'qwen/qwen3.8-27b:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+    'google/gemma-4-31b-it:free',
+    'cohere/north-mini-code:free',
+    'liquid/lfm-2.5-2.6b:free',
+  ];
 
   static List<String> filterNvidiaFreeModels(Iterable<String> models) {
     final availableModels = models.toSet();
@@ -374,13 +395,27 @@ Keep answers concise, helpful, and natural.
 
       final requestUrl = _buildChatCompletionsUrl();
       final modelName = _cleanModelName(_model);
+      final isOpenRouter = isOpenRouterBaseUrl(_baseUrl);
 
-      final requestBody = jsonEncode({
+      final Map<String, dynamic> requestPayload = {
         'model': modelName,
         'messages': messages,
         'temperature': _temperature,
         'max_tokens': _effectiveMaxTokens,
-      });
+      };
+
+      if (isOpenRouter) {
+        requestPayload['models'] = [
+          modelName,
+          if (modelName != 'openrouter/free') 'openrouter/free',
+          'nvidia/nemotron-3.5-lightning:free',
+          'nvidia/nemotron-3-super-120b-a12b:free',
+          'qwen/qwen3.8-27b:free',
+        ];
+        requestPayload['route'] = 'fallback';
+      }
+
+      final requestBody = jsonEncode(requestPayload);
 
       developer.log(
         'API Request: $requestUrl\n$requestBody',
@@ -393,7 +428,7 @@ Keep answers concise, helpful, and natural.
             headers: {
               'Content-Type': 'application/json',
               'Authorization': 'Bearer ${_apiKey?.trim()}',
-              'HTTP-Referer': 'https://github.com/agent-rio',
+              'HTTP-Referer': 'https://github.com/Manik51/Agent-Rio',
               'X-Title': 'Agent Rio',
             },
             body: requestBody,
@@ -430,6 +465,24 @@ Keep answers concise, helpful, and natural.
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('api_model', suggestedSlug);
           // Retry automatically
+          return sendMessage(message, isAgentMode: isAgentMode);
+        }
+
+        // Auto-heal OpenRouter Rate Limit (429) & Provider Errors:
+        if ((response.statusCode == 429 ||
+             errorMessage.contains('Provider returned error') ||
+             errorMessage.toLowerCase().contains('rate limit')) &&
+            isOpenRouter) {
+          final fallbackModel = (modelName == 'openrouter/free')
+              ? 'nvidia/nemotron-3.5-lightning:free'
+              : 'openrouter/free';
+          developer.log(
+            'OpenRouter rate limit for $modelName. Auto-switching to $fallbackModel',
+            name: 'AiService',
+          );
+          _model = fallbackModel;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('api_model', fallbackModel);
           return sendMessage(message, isAgentMode: isAgentMode);
         }
 
@@ -498,23 +551,37 @@ Keep answers concise, helpful, and natural.
 
       final requestUrl = _buildChatCompletionsUrl();
       final modelName = _cleanModelName(_model);
+      final isOpenRouter = isOpenRouterBaseUrl(_baseUrl);
 
       final client = http.Client();
       final request = http.Request('POST', Uri.parse(requestUrl));
       request.headers.addAll({
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${_apiKey?.trim()}',
-        'HTTP-Referer': 'https://github.com/agent-rio',
+        'HTTP-Referer': 'https://github.com/Manik51/Agent-Rio',
         'X-Title': 'Agent Rio',
       });
 
-      request.body = jsonEncode({
+      final Map<String, dynamic> requestPayload = {
         'model': modelName,
         'messages': messages,
         'temperature': _temperature,
         'max_tokens': _effectiveMaxTokens,
         'stream': true,
-      });
+      };
+
+      if (isOpenRouter) {
+        requestPayload['models'] = [
+          modelName,
+          if (modelName != 'openrouter/free') 'openrouter/free',
+          'nvidia/nemotron-3.5-lightning:free',
+          'nvidia/nemotron-3-super-120b-a12b:free',
+          'qwen/qwen3.8-27b:free',
+        ];
+        requestPayload['route'] = 'fallback';
+      }
+
+      request.body = jsonEncode(requestPayload);
 
       final response = await client
           .send(request)
@@ -543,6 +610,25 @@ Keep answers concise, helpful, and natural.
           _model = suggestedSlug;
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('api_model', suggestedSlug);
+          yield* sendMessageStream(message, isAgentMode: isAgentMode);
+          return;
+        }
+
+        // Auto-heal OpenRouter Rate Limit (429) & Provider Errors:
+        if ((response.statusCode == 429 ||
+             errorMessage.contains('Provider returned error') ||
+             errorMessage.toLowerCase().contains('rate limit')) &&
+            isOpenRouter) {
+          final fallbackModel = (modelName == 'openrouter/free')
+              ? 'nvidia/nemotron-3.5-lightning:free'
+              : 'openrouter/free';
+          developer.log(
+            'OpenRouter rate limit in stream for $modelName. Auto-switching to $fallbackModel',
+            name: 'AiService',
+          );
+          _model = fallbackModel;
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('api_model', fallbackModel);
           yield* sendMessageStream(message, isAgentMode: isAgentMode);
           return;
         }
@@ -654,6 +740,25 @@ Keep answers concise, helpful, and natural.
 
         final requestUrl = _buildChatCompletionsUrl();
         final modelName = _cleanModelName(_model);
+        final isOpenRouter = isOpenRouterBaseUrl(_baseUrl);
+
+        final Map<String, dynamic> requestPayload = {
+          'model': modelName,
+          'messages': messages,
+          'temperature': _temperature,
+          'max_tokens': _effectiveMaxTokens,
+        };
+
+        if (isOpenRouter) {
+          requestPayload['models'] = [
+            modelName,
+            if (modelName != 'openrouter/free') 'openrouter/free',
+            'nvidia/nemotron-3.5-lightning:free',
+            'nvidia/nemotron-3-super-120b-a12b:free',
+            'qwen/qwen3.8-27b:free',
+          ];
+          requestPayload['route'] = 'fallback';
+        }
 
         final response = await http
             .post(
@@ -661,15 +766,10 @@ Keep answers concise, helpful, and natural.
               headers: {
                 'Content-Type': 'application/json',
                 'Authorization': 'Bearer ${_apiKey?.trim()}',
-                'HTTP-Referer': 'https://github.com/agent-rio',
+                'HTTP-Referer': 'https://github.com/Manik51/Agent-Rio',
                 'X-Title': 'Agent Rio',
               },
-              body: jsonEncode({
-                'model': modelName,
-                'messages': messages,
-                'temperature': _temperature,
-                'max_tokens': _effectiveMaxTokens,
-              }),
+              body: jsonEncode(requestPayload),
             )
             .timeout(const Duration(minutes: 30));
 
@@ -687,6 +787,25 @@ Keep answers concise, helpful, and natural.
           } catch (_) {
             // ignore parsing errors, use raw body
           }
+
+          // Auto-heal OpenRouter Rate Limit (429) & Provider Errors:
+          if ((response.statusCode == 429 ||
+               errorMessage.contains('Provider returned error') ||
+               errorMessage.toLowerCase().contains('rate limit')) &&
+              isOpenRouter) {
+            final fallbackModel = (modelName == 'openrouter/free')
+                ? 'nvidia/nemotron-3.5-lightning:free'
+                : 'openrouter/free';
+            developer.log(
+              'OpenRouter rate limit in sendTaskMessage for $modelName. Auto-switching to $fallbackModel',
+              name: 'AiService',
+            );
+            _model = fallbackModel;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('api_model', fallbackModel);
+            continue; // retry next attempt immediately with new model
+          }
+
           throw Exception('API error (${response.statusCode}): $errorMessage');
         }
 
@@ -842,11 +961,66 @@ Keep answers concise, helpful, and natural.
           models = data.map((m) => m['id'].toString()).toList();
         }
 
+        if (isOpenRouterBaseUrl(cleanBaseUrl)) {
+          final freeModels = <String>[];
+          if (data is Map && data.containsKey('data')) {
+            final modelsList = data['data'] as List;
+            for (final item in modelsList) {
+              if (item is! Map) continue;
+              final id = item['id']?.toString() ?? '';
+              final pricing = item['pricing'] as Map?;
+              bool isFree = id.endsWith(':free') || id == 'openrouter/free';
+              if (!isFree && pricing != null) {
+                final pPrompt = pricing['prompt']?.toString() ?? '1';
+                final pCompl = pricing['completion']?.toString() ?? '1';
+                if ((pPrompt == '0' || pPrompt == '0.0') && (pCompl == '0' || pCompl == '0.0')) {
+                  isFree = true;
+                }
+              }
+              if (isFree && id.isNotEmpty) {
+                freeModels.add(id);
+              }
+            }
+          }
+
+          if (freeModels.isNotEmpty) {
+            const priorityOrder = [
+              'openrouter/free',
+              'nvidia/nemotron-3-super-120b-a12b:free',
+              'nvidia/nemotron-3.5-lightning:free',
+              'qwen/qwen3.8-27b:free',
+              'nvidia/nemotron-3-ultra-550b-a55b:free',
+              'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
+              'google/gemma-4-31b-it:free',
+              'google/gemma-4-26b-a4b-it:free',
+              'cohere/north-mini-code:free',
+              'liquid/lfm-2.5-2.6b:free',
+              'inclusionai/ling-3.0-flash-sante:free',
+              'thinkingmachines/inkling:free',
+            ];
+
+            final sorted = <String>[];
+            for (final p in priorityOrder) {
+              if (freeModels.contains(p)) {
+                sorted.add(p);
+                freeModels.remove(p);
+              }
+            }
+            freeModels.sort();
+            sorted.addAll(freeModels);
+            return sorted;
+          }
+          return openRouterFreeFallbackCascade;
+        }
+
         if (isNvidiaBaseUrl(cleanBaseUrl)) {
           return filterNvidiaFreeModels(models);
         }
         models.sort();
         return models;
+      }
+      if (isOpenRouterBaseUrl(cleanBaseUrl)) {
+        return openRouterFreeFallbackCascade;
       }
       return [];
     } catch (e) {

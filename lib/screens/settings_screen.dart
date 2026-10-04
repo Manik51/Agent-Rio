@@ -261,50 +261,178 @@ class _SettingsScreenState extends State<SettingsScreen>
         ),
       );
     } else {
+      String getModelTag(String model) {
+        if (model == 'openrouter/free') return '⚡ Recommended • Auto-Router • Zero 429';
+        if (model.contains('nemotron-3-super-120b')) return '🧠 120B Super Model • Ultra Intelligent';
+        if (model.contains('nemotron-3-ultra-550b')) return '🔬 550B Ultra Model • Extreme Reasoning';
+        if (model.contains('nemotron-3.5-lightning')) return '⚡ Lightning Fast • 1M Context';
+        if (model.contains('qwen3.8-27b') || model.contains('qwen')) return '🌐 Qwen 27B • Multilingual & Actions';
+        if (model.contains('nemotron-3-nano-omni')) return '🎯 30B Omni Reasoning • Fast & Smart';
+        if (model.contains('gemma-4-31b')) return '✨ Google Gemma 31B • Smart & Creative';
+        if (model.contains('north-mini-code')) return '💻 Cohere Code • Action Specialist';
+        if (model.contains('lfm-2.5-2.6b')) return '⚡ LiquidAI • Instant Low-Latency';
+        if (model.contains('flash')) return '⚡ Flash Speed • High Throughput';
+        if (model.endsWith(':free')) return '✅ 100% Free';
+        return '';
+      }
+
+      final isOpenRouter = AiService.isOpenRouterBaseUrl(baseUrl);
       showDialog(
         context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: const Color(0xFF131B2E),
-          title: const Text(
-            'Select Model',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 350,
-            child: ListView.builder(
-              itemCount: models.length,
-              itemBuilder: (context, index) {
-                final m = models[index];
-                final isSelected = _modelController.text.trim() == m;
-                return ListTile(
-                  title: Text(
-                    m,
-                    style: TextStyle(
-                      color: isSelected ? const Color(0xFF38BDF8) : Colors.white70,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                      fontSize: 13,
+        builder: (ctx) {
+          String filter = '';
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              final filteredModels = models
+                  .where((m) => m.toLowerCase().contains(filter.toLowerCase()))
+                  .toList();
+              return AlertDialog(
+                backgroundColor: const Color(0xFF131B2E),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: Row(
+                  children: [
+                    Icon(
+                      isOpenRouter ? Icons.bolt_rounded : Icons.smart_toy_rounded,
+                      color: const Color(0xFF38BDF8),
+                      size: 20,
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        isOpenRouter
+                            ? 'OpenRouter Free Models (${models.length})'
+                            : 'Select Model (${models.length})',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: double.maxFinite,
+                  height: 420,
+                  child: Column(
+                    children: [
+                      TextField(
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Search free models...',
+                          hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          prefixIcon: const Icon(Icons.search_rounded, size: 16, color: Color(0xFF94A3B8)),
+                          filled: true,
+                          fillColor: const Color(0xFF0F172A),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF1E293B)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Color(0xFF6366F1)),
+                          ),
+                        ),
+                        onChanged: (val) => setDialogState(() => filter = val.trim()),
+                      ),
+                      const SizedBox(height: 10),
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: filteredModels.length,
+                          itemBuilder: (context, index) {
+                            final m = filteredModels[index];
+                            final isSelected = _modelController.text.trim() == m;
+                            final tag = getModelTag(m);
+                            return InkWell(
+                              onTap: () {
+                                setState(() => _modelController.text = m);
+                                _autoSave();
+                                Navigator.pop(ctx);
+                              },
+                              borderRadius: BorderRadius.circular(10),
+                              child: Container(
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF6366F1).withOpacity(0.2)
+                                      : const Color(0xFF0B0F19),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF38BDF8)
+                                        : const Color(0xFF1E293B),
+                                    width: isSelected ? 1.5 : 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            m,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? const Color(0xFF38BDF8)
+                                                  : Colors.white,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.w500,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                          if (tag.isNotEmpty) ...[
+                                            const SizedBox(height: 3),
+                                            Text(
+                                              tag,
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                color: isSelected
+                                                    ? const Color(0xFF7DD3FC)
+                                                    : const Color(0xFF94A3B8),
+                                                fontWeight: m == 'openrouter/free'
+                                                    ? FontWeight.w600
+                                                    : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    if (isSelected)
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        color: Color(0xFF38BDF8),
+                                        size: 18,
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  trailing: isSelected
-                      ? const Icon(Icons.check_circle_rounded, color: Color(0xFF38BDF8), size: 18)
-                      : null,
-                  onTap: () {
-                    setState(() => _modelController.text = m);
-                    _autoSave();
-                    Navigator.pop(context);
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close', style: TextStyle(color: Color(0xFF94A3B8))),
-            ),
-          ],
-        ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close', style: TextStyle(color: Color(0xFF94A3B8))),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       );
     }
   }
