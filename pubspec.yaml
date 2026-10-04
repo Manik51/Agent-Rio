@@ -1,7 +1,7 @@
 name: agent_rio
 description: "Agent Rio - Autonomous Voice-Activated Android AI Automation Agent"
 publish_to: "none"
-version: 1.1.4+104
+version: 1.1.5+105
 
 environment:
   sdk: ^3.10.3
@@ -62,6 +62,8 @@ flutter_launcher_icons:
   ios: false
   image_path: "assets/app-logo.png"
   min_sdk_size: 21
+  adaptive_icon_background: "#0B0F19"
+  adaptive_icon_foreground: "assets/app-logo.png"
 
 flutter:
   uses-material-design: true

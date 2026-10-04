@@ -90,15 +90,6 @@ class _RioAvatarWidgetState extends State<RioAvatarWidget>
 
   @override
   Widget build(BuildContext context) {
-    if (_currentType == RioAvatarType.rioOfficial) {
-      return _RioRiveAvatarWidget(
-        state: widget.state,
-        size: widget.size,
-        onTap: widget.onTap,
-        onDoubleTap: widget.onDoubleTap,
-      );
-    }
-
     return GestureDetector(
       onTap: widget.onTap,
       onDoubleTap: widget.onDoubleTap,
