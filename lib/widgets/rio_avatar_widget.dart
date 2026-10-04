@@ -1,7 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:rive/rive.dart' hide RadialGradient;
+import 'package:rive/rive.dart'
+    show SMIBool, SMITrigger, Artboard, StateMachineController, RiveAnimation;
 
 enum RioAvatarState { idle, listening, working, success, error }
 
