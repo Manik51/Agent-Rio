@@ -268,10 +268,6 @@ class _RioRiveAvatarWidgetState extends State<_RioRiveAvatarWidget>
           animations: const ['Idle'],
           fit: BoxFit.contain,
           onInit: _onRiveInit,
-          onError: (err) {
-            debugPrint('Rive load error: $err');
-            if (mounted) setState(() => _hasError = true);
-          },
           placeHolder: Center(
             child: SizedBox(
               width: widget.size,
