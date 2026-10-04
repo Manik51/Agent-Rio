@@ -54,7 +54,9 @@ class _OverlayAppState extends State<OverlayApp> {
       final sz = prefs.getInt('rio_floating_size') ?? 72;
       if (mounted) setState(() => _floatingSize = sz);
     });
-    _speech.initialize();
+    try {
+      _speech.initialize();
+    } catch (_) {}
     _triggerService.onStateChanged = (state) {
       if (mounted) {
         setState(() {
@@ -62,7 +64,9 @@ class _OverlayAppState extends State<OverlayApp> {
         });
       }
     };
-    _triggerService.initSpeech();
+    try {
+      _triggerService.initSpeech();
+    } catch (_) {}
 
     _aiService = AiService();
     _screenService = ScreenAutomationService();

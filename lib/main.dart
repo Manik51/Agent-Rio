@@ -15,17 +15,19 @@ void overlayMain() {
     MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        brightness: Brightness.dark,
         canvasColor: Colors.transparent,
         scaffoldBackgroundColor: Colors.transparent,
-        cardColor: Colors.white,
-        dialogBackgroundColor: Colors.transparent,
-        primaryColor: const Color(0xFF4F46E5),
+        cardColor: const Color(0xFF151D30),
+        dialogBackgroundColor: const Color(0xFF0B0F19),
+        primaryColor: const Color(0xFF6366F1),
         useMaterial3: true,
-        colorScheme: const ColorScheme.light(
+        colorScheme: const ColorScheme.dark(
           background: Colors.transparent,
-          primary: Color(0xFF4F46E5),
-          surface: Colors.white,
-          onSurface: Color(0xFF1E293B),
+          primary: Color(0xFF6366F1),
+          secondary: Color(0xFF38BDF8),
+          surface: Color(0xFF151D30),
+          onSurface: Color(0xFFF8FAFC),
           onPrimary: Colors.white,
         ),
       ),

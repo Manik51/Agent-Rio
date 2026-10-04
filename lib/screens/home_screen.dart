@@ -88,7 +88,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _floatingRioSize = size;
       });
     }
-    await _updateOverlayState();
+    if (enabled) {
+      final isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+      if (isGranted && !(await FlutterOverlayWindow.isActive() ?? false)) {
+        try {
+          await FlutterOverlayWindow.showOverlay(
+            enableDrag: true,
+            overlayTitle: "Agent Rio",
+            overlayContent: "Floating Assistant",
+            flag: OverlayFlag.defaultFlag,
+            alignment: OverlayAlignment.centerRight,
+            visibility: NotificationVisibility.visibilitySecret,
+            positionGravity: PositionGravity.auto,
+            startPosition: const OverlayPosition(0, 200),
+            width: size,
+            height: size,
+          );
+        } catch (_) {}
+      }
+    }
   }
 
   Future<void> _toggleFloatingRio(bool value) async {
@@ -110,26 +128,34 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           );
         }
         await FlutterOverlayWindow.requestPermission();
-      } else {
-        if (!await FlutterOverlayWindow.isActive()) {
-          await FlutterOverlayWindow.showOverlay(
-            enableDrag: true,
-            overlayTitle: "Agent Rio",
-            overlayContent: "Floating Assistant",
-            flag: OverlayFlag.focusPointer,
-            alignment: OverlayAlignment.centerRight,
-            visibility: NotificationVisibility.visibilitySecret,
-            positionGravity: PositionGravity.auto,
-            startPosition: const OverlayPosition(0, 200),
-            width: _floatingRioSize,
-            height: _floatingRioSize,
-          );
+        isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+        if (!isGranted) return;
+      }
+      
+      try {
+        if (await FlutterOverlayWindow.isActive() ?? false) {
+          await FlutterOverlayWindow.closeOverlay();
+          await Future.delayed(const Duration(milliseconds: 100));
         }
+        await FlutterOverlayWindow.showOverlay(
+          enableDrag: true,
+          overlayTitle: "Agent Rio",
+          overlayContent: "Floating Assistant",
+          flag: OverlayFlag.defaultFlag,
+          alignment: OverlayAlignment.centerRight,
+          visibility: NotificationVisibility.visibilitySecret,
+          positionGravity: PositionGravity.auto,
+          startPosition: const OverlayPosition(0, 200),
+          width: _floatingRioSize,
+          height: _floatingRioSize,
+        );
+      } catch (e) {
+        log("Error showing overlay from home: $e");
       }
     } else {
       await prefs.setBool('rio_floating_enabled', false);
       setState(() => _floatingRioEnabled = false);
-      if (await FlutterOverlayWindow.isActive()) {
+      if (await FlutterOverlayWindow.isActive() ?? false) {
         await FlutterOverlayWindow.closeOverlay();
       }
     }

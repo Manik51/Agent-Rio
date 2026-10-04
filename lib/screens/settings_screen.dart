@@ -246,40 +246,58 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  Future<void> _showFloatingRio() async {
+    final isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+    if (!isGranted) return;
+    try {
+      if (await FlutterOverlayWindow.isActive() ?? false) {
+        await FlutterOverlayWindow.closeOverlay();
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true,
+        overlayTitle: "Agent Rio",
+        overlayContent: "Floating Assistant",
+        flag: OverlayFlag.defaultFlag,
+        alignment: OverlayAlignment.centerRight,
+        visibility: NotificationVisibility.visibilitySecret,
+        positionGravity: PositionGravity.auto,
+        startPosition: const OverlayPosition(0, 200),
+        width: _floatingIconSize,
+        height: _floatingIconSize,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Agent Rio avatar is now floating on your screen!'),
+            backgroundColor: Color(0xFF10B981),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      log("Error showing overlay: $e");
+    }
+  }
+
   Future<void> _toggleFloatingIcon(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     if (val) {
-      bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
       await prefs.setBool('rio_floating_enabled', true);
-      setState(() {
-        _floatingIconEnabled = true;
-      });
+      setState(() => _floatingIconEnabled = true);
 
+      bool isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
       if (!isGranted) {
         if (mounted) {
           _showPermissionDialog();
         }
-        await FlutterOverlayWindow.requestPermission();
-      } else {
-        if (!await FlutterOverlayWindow.isActive()) {
-          await FlutterOverlayWindow.showOverlay(
-            enableDrag: true,
-            overlayTitle: "Agent Rio",
-            overlayContent: "Floating Assistant",
-            flag: OverlayFlag.focusPointer,
-            alignment: OverlayAlignment.centerRight,
-            visibility: NotificationVisibility.visibilitySecret,
-            positionGravity: PositionGravity.auto,
-            startPosition: const OverlayPosition(0, 200),
-            width: _floatingIconSize,
-            height: _floatingIconSize,
-          );
-        }
+        return;
       }
+      await _showFloatingRio();
     } else {
       await prefs.setBool('rio_floating_enabled', false);
       setState(() => _floatingIconEnabled = false);
-      if (await FlutterOverlayWindow.isActive()) {
+      if (await FlutterOverlayWindow.isActive() ?? false) {
         await FlutterOverlayWindow.closeOverlay();
       }
     }
@@ -315,6 +333,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             onPressed: () async {
               Navigator.pop(context);
               await FlutterOverlayWindow.requestPermission();
+              final isGranted = await FlutterOverlayWindow.isPermissionGranted() ?? false;
+              if (isGranted && mounted) {
+                setState(() => _isOverlayPermissionGranted = true);
+                await _showFloatingRio();
+              }
             },
             child: const Text('Open Settings', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
@@ -739,6 +762,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   onPressed: () async {
                     await FlutterOverlayWindow.requestPermission();
                     await _checkPermissions();
+                    if (_isOverlayPermissionGranted) {
+                      await _showFloatingRio();
+                    }
                   },
                   icon: const Icon(Icons.security_rounded, size: 16, color: Colors.white),
                   label: const Text(
@@ -749,6 +775,25 @@ class _SettingsScreenState extends State<SettingsScreen>
                     backgroundColor: const Color(0xFF6366F1),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ] else if (_floatingIconEnabled) ...[
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _showFloatingRio,
+                    icon: const Icon(Icons.rocket_launch_rounded, size: 16, color: Colors.white),
+                    label: const Text(
+                      'Launch / Refresh Floating Rio Now',
+                      style: TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.bold),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6366F1),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),

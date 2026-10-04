@@ -122,11 +122,12 @@ public class OverlayService extends Service implements View.OnTouchListener {
             isRunning = false;
             return START_STICKY;
         }
-        if (windowManager != null) {
-            windowManager.removeView(flutterView);
-            windowManager = null;
-            flutterView.detachFromFlutterEngine();
-            stopSelf();
+        if (windowManager != null && flutterView != null) {
+            try {
+                windowManager.removeView(flutterView);
+                flutterView.detachFromFlutterEngine();
+            } catch (Exception ignored) {}
+            flutterView = null;
         }
         isRunning = true;
         Log.d("onStartCommand", "Service started");

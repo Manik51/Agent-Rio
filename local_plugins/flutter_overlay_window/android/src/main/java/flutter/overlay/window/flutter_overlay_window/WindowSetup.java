@@ -43,7 +43,7 @@ public abstract class WindowSetup {
                     WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
         }
         if (name.equalsIgnoreCase("flagNotTouchModal") || name.equalsIgnoreCase("focusPointer")) {
-            flag = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
+            flag = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL;
         }
     }
 

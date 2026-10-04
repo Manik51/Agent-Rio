@@ -716,27 +716,68 @@ Answer questions, explain concepts, brainstorm, write messages, and chat with th
     String apiKey,
   ) async {
     try {
-      String cleanBaseUrl = baseUrl;
-      // Many providers host it at /models, but some require the base URL without /chat/completions logic
+      final cleanKey = apiKey.trim().replaceFirst(RegExp(r'^Bearer\s+', caseSensitive: false), '');
+      final isGemini = baseUrl.contains('generativelanguage.googleapis.com') ||
+          cleanKey.startsWith('AIzaSy');
+
+      if (isGemini) {
+        // Query Google Gemini native models endpoint
+        try {
+          final geminiUrl = 'https://generativelanguage.googleapis.com/v1beta/models?key=$cleanKey';
+          final response = await http.get(Uri.parse(geminiUrl)).timeout(const Duration(seconds: 10));
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body);
+            if (data is Map && data['models'] is List) {
+              final list = (data['models'] as List)
+                  .where((m) {
+                    final methods = m['supportedGenerationMethods'] as List?;
+                    return methods != null && methods.contains('generateContent');
+                  })
+                  .map((m) => m['name'].toString().replaceFirst('models/', ''))
+                  .where((name) => name.toLowerCase().contains('gemini'))
+                  .toList();
+              if (list.isNotEmpty) {
+                list.sort();
+                return list;
+              }
+            }
+          }
+        } catch (e) {
+          print('Error querying Gemini models: $e');
+        }
+        // Fallback verified Gemini models if API call fails
+        return [
+          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+          'gemini-1.5-pro',
+        ];
+      }
+
+      String cleanBaseUrl = baseUrl.trim();
       if (cleanBaseUrl.endsWith('/chat/completions')) {
         cleanBaseUrl = cleanBaseUrl.replaceAll('/chat/completions', '');
+      }
+      while (cleanBaseUrl.endsWith('/')) {
+        cleanBaseUrl = cleanBaseUrl.substring(0, cleanBaseUrl.length - 1);
       }
 
       final response = await http.get(
         Uri.parse('$cleanBaseUrl/models'),
-        headers: {'Authorization': 'Bearer $apiKey'},
-      );
+        headers: {
+          'Authorization': 'Bearer $cleanKey',
+          'HTTP-Referer': 'https://github.com/Manik51/Agent-Rio',
+          'X-Title': 'Agent Rio',
+        },
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        List<String> models;
+        List<String> models = [];
         if (data is Map && data.containsKey('data')) {
           final modelsList = data['data'] as List;
           models = modelsList.map((m) => m['id'].toString()).toList();
         } else if (data is List) {
           models = data.map((m) => m['id'].toString()).toList();
-        } else {
-          return [];
         }
 
         if (isNvidiaBaseUrl(cleanBaseUrl)) {
