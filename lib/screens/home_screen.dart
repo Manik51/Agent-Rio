@@ -150,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           height: _floatingRioSize,
         );
       } catch (e) {
-        log("Error showing overlay from home: $e");
+        developer.log("Error showing overlay from home: $e", name: 'AgentRio');
       }
     } else {
       await prefs.setBool('rio_floating_enabled', false);

@@ -23,7 +23,6 @@ void overlayMain() {
         primaryColor: const Color(0xFF6366F1),
         useMaterial3: true,
         colorScheme: const ColorScheme.dark(
-          background: Colors.transparent,
           primary: Color(0xFF6366F1),
           secondary: Color(0xFF38BDF8),
           surface: Color(0xFF151D30),

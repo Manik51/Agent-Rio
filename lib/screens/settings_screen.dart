@@ -276,7 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen>
         );
       }
     } catch (e) {
-      log("Error showing overlay: $e");
+      debugPrint("Error showing overlay: $e");
     }
   }
 
