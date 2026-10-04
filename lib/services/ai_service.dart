@@ -407,9 +407,7 @@ Keep answers concise, helpful, and natural.
       if (isOpenRouter) {
         requestPayload['models'] = [
           modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free',
-          'nvidia/nemotron-3.5-lightning:free',
-          'nvidia/nemotron-3-super-120b-a12b:free',
+          if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
           'qwen/qwen3.8-27b:free',
         ];
         requestPayload['route'] = 'fallback';
@@ -573,9 +571,7 @@ Keep answers concise, helpful, and natural.
       if (isOpenRouter) {
         requestPayload['models'] = [
           modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free',
-          'nvidia/nemotron-3.5-lightning:free',
-          'nvidia/nemotron-3-super-120b-a12b:free',
+          if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
           'qwen/qwen3.8-27b:free',
         ];
         requestPayload['route'] = 'fallback';
@@ -752,9 +748,7 @@ Keep answers concise, helpful, and natural.
         if (isOpenRouter) {
           requestPayload['models'] = [
             modelName,
-            if (modelName != 'openrouter/free') 'openrouter/free',
-            'nvidia/nemotron-3.5-lightning:free',
-            'nvidia/nemotron-3-super-120b-a12b:free',
+            if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
             'qwen/qwen3.8-27b:free',
           ];
           requestPayload['route'] = 'fallback';

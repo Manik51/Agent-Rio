@@ -64,9 +64,34 @@ class _OverlayAppState extends State<OverlayApp> {
         });
       }
     };
+
+    // Phase 2: Surface voice conversation in overlay chat
+    _triggerService.onCommandReceived = (command) {
+      if (mounted) {
+        final userMsg = ChatMessage(role: 'user', content: '🎤 $command');
+        setState(() {
+          _messages.add(userMsg);
+          _scrollToBottom();
+        });
+        _persistOverlayMessage(userMsg);
+      }
+    };
+
+    _triggerService.onResponseReceived = (response, success) {
+      if (mounted) {
+        final assistantMsg = ChatMessage(role: 'assistant', content: response);
+        setState(() {
+          _messages.add(assistantMsg);
+          _scrollToBottom();
+        });
+        _persistOverlayMessage(assistantMsg);
+      }
+    };
+
     try {
       _triggerService.initSpeech();
     } catch (_) {}
+
 
     _aiService = AiService();
     _screenService = ScreenAutomationService();
@@ -357,7 +382,7 @@ class _OverlayAppState extends State<OverlayApp> {
         _scrollToBottom();
       });
     } else {
-      await FlutterOverlayWindow.resizeOverlay(_floatingSize, _floatingSize, true);
+      await FlutterOverlayWindow.resizeOverlay(_floatingSize, _floatingSize + 32, true);
       // Restore the original bubble position
       if (_savedBubblePosition != null) {
         await FlutterOverlayWindow.moveOverlay(_savedBubblePosition!);
@@ -399,23 +424,61 @@ class _OverlayAppState extends State<OverlayApp> {
   Widget _buildContent() {
     if (!_isExpanded) {
       final double avatarSz = _floatingSize.toDouble();
+      final String? stateLabel = _avatarState == RioAvatarState.listening
+          ? '🎤 শুনছি...'
+          : _avatarState == RioAvatarState.working
+          ? '🤔 ভাবছি...'
+          : _avatarState == RioAvatarState.success
+          ? '✅ Done'
+          : _avatarState == RioAvatarState.error
+          ? '❌ Error'
+          : null;
+
       return SizedBox.expand(
         child: Center(
-          child: SizedBox(
-            width: avatarSz,
-            height: avatarSz,
-            child: RioAvatarWidget(
-              state: _avatarState,
-              onTap: () {
-                _triggerService.handleAvatarTap();
-              },
-              onDoubleTap: _toggleExpanded,
-              size: avatarSz,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: avatarSz,
+                height: avatarSz,
+                child: RioAvatarWidget(
+                  state: _avatarState,
+                  onTap: () {
+                    _triggerService.handleAvatarTap();
+                  },
+                  onDoubleTap: _toggleExpanded,
+                  size: avatarSz,
+                ),
+              ),
+              if (stateLabel != null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0B0F19).withOpacity(0.85),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFF6366F1).withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    stateLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       );
     }
+
 
     // Full Chat Interface Panel
     return OverflowBox(
