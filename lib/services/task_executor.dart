@@ -624,7 +624,7 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           return 'I could not complete the task. Please try again.';
         }
 
-        final recovery = await _recoveryEngine.diagnose(action, screenContent);
+        final recovery = await _recoveryEngine.diagnose(action, screenContent, userGoal: userGoal, vision: _vision);
         _report('Recovering: ${recovery.description}');
 
         if (recovery.action == 'wait') {

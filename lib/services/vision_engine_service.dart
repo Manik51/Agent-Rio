@@ -443,4 +443,16 @@ Respond with ONLY valid JSON (no markdown):
   }
 }
 
-enum _VisionMode { findCoords, verify, describe }
+enum _VisionMode { findCoords, verify, describe   // ---------------------------------------------------------------------------
+  // Raw API hooks for advanced features (Phase 4)
+  // ---------------------------------------------------------------------------
+
+  Future<String?> getScreenBase64() async {
+    return await _screen.takeScreenshot();
+  }
+
+  Future<String> askVisionDirect(String base64Image, String prompt) async {
+    final response = await _callGeminiVision(base64Image, prompt, maxOutputTokens: 256);
+    return response.description;
+  }
+}
