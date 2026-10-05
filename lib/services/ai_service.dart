@@ -413,8 +413,8 @@ Keep answers concise, helpful, and natural.
       if (isOpenRouter) {
         requestPayload['models'] = [
           modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
-          'qwen/qwen3.8-27b:free',
+          if (modelName != 'openrouter/free') 'openrouter/free',
+          'google/gemini-2.0-flash-lite-preview-02-05:free',
         ];
         requestPayload['route'] = 'fallback';
       }
@@ -437,7 +437,7 @@ Keep answers concise, helpful, and natural.
             },
             body: requestBody,
           )
-          .timeout(const Duration(minutes: 30));
+          .timeout(const Duration(seconds: 30));
 
       developer.log(
         'API Response [${response.statusCode}]: ${response.body}',
@@ -577,8 +577,8 @@ Keep answers concise, helpful, and natural.
       if (isOpenRouter) {
         requestPayload['models'] = [
           modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
-          'qwen/qwen3.8-27b:free',
+          if (modelName != 'openrouter/free') 'openrouter/free',
+          'google/gemini-2.0-flash-lite-preview-02-05:free',
         ];
         requestPayload['route'] = 'fallback';
       }
@@ -587,7 +587,7 @@ Keep answers concise, helpful, and natural.
 
       final response = await client
           .send(request)
-          .timeout(const Duration(minutes: 30));
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode != 200) {
         final body = await response.stream.bytesToString();
@@ -754,8 +754,8 @@ Keep answers concise, helpful, and natural.
         if (isOpenRouter) {
           requestPayload['models'] = [
             modelName,
-            if (modelName != 'openrouter/free') 'openrouter/free' else 'nvidia/nemotron-3.5-lightning:free',
-            'qwen/qwen3.8-27b:free',
+            if (modelName != 'openrouter/free') 'openrouter/free',
+            'google/gemini-2.0-flash-lite-preview-02-05:free',
           ];
           requestPayload['route'] = 'fallback';
         }
@@ -771,7 +771,7 @@ Keep answers concise, helpful, and natural.
               },
               body: jsonEncode(requestPayload),
             )
-            .timeout(const Duration(minutes: 30));
+            .timeout(const Duration(seconds: 30));
 
         if (response.statusCode != 200) {
           String errorMessage = response.body;

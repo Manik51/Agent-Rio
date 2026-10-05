@@ -79,10 +79,25 @@ If this requires navigating an app or the screen, summarize your action in 1 sho
       );
     } catch (e) {
       developer.log('Online AI brain error: $e', name: 'RioBrain');
-      const fallbackMsg = "I encountered an issue connecting to the AI brain. Please check your API key.";
-      await _tts.speak(fallbackMsg);
+      final errStr = e.toString().toLowerCase();
+      String fallbackMsg = "Network error. Please try again.";
+      if (errStr.contains('api key')) {
+        fallbackMsg = "API Key error. Please check settings.";
+      } else if (errStr.contains('429') || errStr.contains('rate limit')) {
+        fallbackMsg = "The AI model is overloaded (Rate Limit). Try again in a few seconds.";
+      } else if (errStr.contains('timeout')) {
+        fallbackMsg = "Request timed out. The AI model is too slow right now.";
+      } else {
+        // Just extract the actual error text if it's an Exception
+        fallbackMsg = e.toString().replaceAll('Exception:', '').trim();
+        if (fallbackMsg.length > 80) {
+          fallbackMsg = fallbackMsg.substring(0, 80) + '...';
+        }
+      }
+      
+      await _tts.speak("Error: $fallbackMsg");
       return RioBrainResult(
-        spokenReply: fallbackMsg,
+        spokenReply: "❌ $fallbackMsg",
         executedSuccessfully: false,
       );
     }

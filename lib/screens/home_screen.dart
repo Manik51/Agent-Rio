@@ -102,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             positionGravity: PositionGravity.auto,
             startPosition: const OverlayPosition(0, 200),
             width: size,
-            height: size + 32,
+            height: size,
           );
         } catch (_) {}
       }
@@ -147,7 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           positionGravity: PositionGravity.auto,
           startPosition: const OverlayPosition(0, 200),
           width: _floatingRioSize,
-          height: _floatingRioSize + 32,
+          height: _floatingRioSize,
         );
       } catch (e) {
         developer.log("Error showing overlay from home: $e", name: 'AgentRio');
@@ -356,7 +356,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         positionGravity: PositionGravity.auto,
         startPosition: const OverlayPosition(0, 200),
         width: 56,
-        height: 88,
+        height: 56,
       );
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
