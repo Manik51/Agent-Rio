@@ -71,31 +71,26 @@ Respond with ONLY a JSON object (no markdown, no code fences):
 }
 
 Available actions:
-- click_text: {"text": "exact text to click"} - Click an element by its visible text
-- click_at: {"x": 540, "y": 960} - Click at screen coordinates (use bounds from screen dump)
-- click_vision: {"description": "describe the visual element to tap"} - Use AI Vision to find and tap an unlabeled element (icon, image, button with no text). Use when click_text fails.
-- type_text: {"text": "hello", "field_hint": "optional hint"} - Type into the focused/first edit field
-- press_enter: {} - Press the Enter/Search key on the keyboard to submit a search/form
-- scroll: {"direction": "down"} - Scroll down/up on the current view
-- swipe: {"startX": 540, "startY": 2000, "endX": 540, "endY": 500} - Swipe from start to end coordinates
-- press_back: {} - Press the back button
-- press_home: {} - Press the home button
-- open_app: {"app_name": "WhatsApp"} - Open an app
-- wait: {} - Wait a moment for content to load
-- done: {} - Task is complete
+- open_url: {"url": "https://www.youtube.com/results?search_query=song"} - IMMEDIATELY open a deep link. Use this to skip manual searching! (e.g., https://www.google.com/search?q=movie)
+- search_web: {"query": "what to search"} - Perform a Google search in Chrome instantly.
+- open_app: {"app_name": "WhatsApp"} - Open an app by name.
+- click_text: {"text": "exact text"} - Click an element by its visible text.
+- type_text: {"text": "hello"} - Instantly type text into the search box. (You do NOT need to click it first!)
+- press_enter: {} - Press the Enter/Search key to submit a search/form.
+- click_vision: {"description": "describe the visual element"} - Use AI Vision to tap an unlabeled icon/button.
+- scroll: {"direction": "down"} - Scroll down/up.
+- press_back: {} - Press the back button.
+- press_home: {} - Press the home button.
+- wait: {} - Wait for content to load.
+- done: {} - Task is complete.
 
 Rules:
-- You will receive a TEXT DUMP of the accessibility tree containing exact text strings and center coordinates.
-- ALWAYS use the text dump to decide your next action.
-- If you need to click something, prefer using `click_text`. If the element does not have text, use `click_at` with the coordinates provided in the text dump.
-- Use `click_vision` ONLY for unlabeled elements with no text AND no coordinates (mic icons, camera buttons, unlabeled FABs).
-- When typing in a search box, you MUST click it first, wait a step, and THEN type.
-- After typing a search query, use `press_enter` once. If the screen does not change, click the exact visible suggestion text. Do not repeat the same submit action more than twice.
-- Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead.
-- Set is_complete=true ONLY when the task is fully done.
-- If you need to open an app and cannot find it after a couple of scrolls, open Chrome or Google to search instead.
-- If stuck after 3 attempts, set is_complete=true and explain in reasoning.
-- Keep reasoning very brief (1 sentence)
+- ⚡ FAST PATH: ALWAYS prefer `open_url` for searching YouTube, Google, or opening websites. It skips 5 manual steps and opens the app directly to the search results!
+- ⚡ FAST TYPING: You do NOT need to click a search box before typing. Just use `type_text` directly!
+- If the screen dump has what you want to tap, use `click_text`.
+- If an icon is unlabeled (like a mic or attach button) and has no text, use `click_vision`.
+- Set is_complete=true ONLY when the task is fully accomplished.
+- Keep reasoning very brief.
 ''';
 
   /// Extract JSON safely even if wrapped in markdown or conversational text
@@ -550,6 +545,23 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           actionResult = 'Pressed home';
           break;
 
+                case 'open_url':
+          final url = params['url'] as String? ?? '';
+          if (url.isNotEmpty) {
+            actionResult = await _appLauncher.openUrl(url);
+            success = !actionResult.startsWith('Error');
+          }
+          break;
+
+        case 'search_web':
+          final query = params['query'] as String? ?? '';
+          if (query.isNotEmpty) {
+            final url = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
+            actionResult = await _appLauncher.openUrl(url);
+            success = !actionResult.startsWith('Error');
+          }
+          break;
+
         case 'open_app':
           final appName = params['app_name'] as String? ?? '';
           actionResult = await _appLauncher.openApp(appName);
@@ -813,6 +825,23 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
           success = await _screenService.pressHome();
           actionResult = 'Pressed home';
           break;
+                case 'open_url':
+          final url = params['url'] as String? ?? '';
+          if (url.isNotEmpty) {
+            actionResult = await _appLauncher.openUrl(url);
+            success = !actionResult.startsWith('Error');
+          }
+          break;
+
+        case 'search_web':
+          final query = params['query'] as String? ?? '';
+          if (query.isNotEmpty) {
+            final url = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
+            actionResult = await _appLauncher.openUrl(url);
+            success = !actionResult.startsWith('Error');
+          }
+          break;
+
         case 'open_app':
           final appName = step.params['app_name'] as String? ?? '';
           actionResult = await _appLauncher.openApp(appName);
