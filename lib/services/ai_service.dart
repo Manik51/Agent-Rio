@@ -659,24 +659,11 @@ Keep answers concise, helpful, and natural.
                   final content = rawContent;
                   accumulatedContent.write(content);
 
-                  // Handle <think> block stripping on the fly for better stream styling
-                  if (content.contains('<think>')) {
-                    inThinkBlock = true;
-                    // If there is text before <think>, yield it
-                    final parts = content.split('<think>');
-                    if (parts[0].isNotEmpty) {
-                      yield parts[0];
-                    }
-                  } else if (content.contains('</think>')) {
-                    inThinkBlock = false;
-                    // If there is text after </think>, yield it
-                    final parts = content.split('</think>');
-                    if (parts.length > 1 && parts[1].isNotEmpty) {
-                      yield parts[1];
-                    }
-                  } else if (!inThinkBlock) {
-                    yield content;
-                  }
+                  // Yield the content directly, replacing HTML tags so they are visible and don't break markdown
+                  String displayContent = content
+                      .replaceAll('<think>', '💭 *Thinking...*\n\n')
+                      .replaceAll('</think>', '\n\n---\n\n');
+                  yield displayContent;
                 }
                 if (choice['finish_reason'] != null) break;
               }
