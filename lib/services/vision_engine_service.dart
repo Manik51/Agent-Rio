@@ -300,11 +300,23 @@ class VisionEngineService {
         name: 'VisionEngine',
       );
 
+      if (mode == _VisionMode.custom) {
+        return VisionResult(
+          found: true,
+          description: text, // Return the raw text
+        );
+      }
+      
       // Parse the structured JSON response
       final jsonStr = _extractJson(text);
       final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
 
       if (mode == _VisionMode.findCoords) {
+        return VisionResult(
+          found: true,
+          description: text, // Return the raw text
+        );
+      } else if (mode == _VisionMode.findCoords) {
         final found = parsed['found'] == true;
         final x = (parsed['x'] as num?)?.toDouble();
         final y = (parsed['y'] as num?)?.toDouble();
@@ -351,6 +363,8 @@ class VisionEngineService {
 
   String _buildSystemPrompt(_VisionMode mode) {
     switch (mode) {
+      case _VisionMode.custom:
+        return 'You are an AI assistant analyzing a phone screen. Follow the user prompt strictly.';
       case _VisionMode.findCoords:
         return '''
 You are a phone screen analyzer. You receive a screenshot of an Android phone and a target description.
@@ -441,9 +455,8 @@ Respond with ONLY valid JSON (no markdown):
     } catch (_) {}
     return body.length > 200 ? body.substring(0, 200) : body;
   }
-}
 
-enum _VisionMode { findCoords, verify, describe   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // Raw API hooks for advanced features (Phase 4)
   // ---------------------------------------------------------------------------
 
@@ -452,7 +465,14 @@ enum _VisionMode { findCoords, verify, describe   // ---------------------------
   }
 
   Future<String> askVisionDirect(String base64Image, String prompt) async {
-    final response = await _callGeminiVision(base64Image, prompt, maxOutputTokens: 256);
+    // We use describe mode since we want a free-form JSON response according to our prompt
+    // Wait, _VisionMode.describe has a fixed system prompt too. 
+    // We should add a new mode for custom direct questions.
+    final response = await _callGeminiVision(base64Image, prompt, mode: _VisionMode.custom);
     return response.description;
   }
 }
+
+
+
+enum _VisionMode { findCoords, verify, describe, custom }
