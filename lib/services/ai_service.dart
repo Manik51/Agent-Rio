@@ -410,14 +410,7 @@ Keep answers concise, helpful, and natural.
         'max_tokens': _effectiveMaxTokens,
       };
 
-      if (isOpenRouter) {
-        requestPayload['models'] = [
-          modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free',
-          'google/gemini-2.0-flash-lite-preview-02-05:free',
-        ];
-        requestPayload['route'] = 'fallback';
-      }
+
 
       final requestBody = jsonEncode(requestPayload);
 
@@ -574,14 +567,7 @@ Keep answers concise, helpful, and natural.
         'stream': true,
       };
 
-      if (isOpenRouter) {
-        requestPayload['models'] = [
-          modelName,
-          if (modelName != 'openrouter/free') 'openrouter/free',
-          'google/gemini-2.0-flash-lite-preview-02-05:free',
-        ];
-        requestPayload['route'] = 'fallback';
-      }
+
 
       request.body = jsonEncode(requestPayload);
 
@@ -751,14 +737,7 @@ Keep answers concise, helpful, and natural.
           'max_tokens': _effectiveMaxTokens,
         };
 
-        if (isOpenRouter) {
-          requestPayload['models'] = [
-            modelName,
-            if (modelName != 'openrouter/free') 'openrouter/free',
-            'google/gemini-2.0-flash-lite-preview-02-05:free',
-          ];
-          requestPayload['route'] = 'fallback';
-        }
+
 
         final response = await http
             .post(
