@@ -556,8 +556,8 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
         case 'search_web':
           final query = params['query'] as String? ?? '';
           if (query.isNotEmpty) {
-            final url = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
-            actionResult = await _appLauncher.openUrl(url);
+            final searchUrl = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
+            actionResult = await _appLauncher.openUrl(searchUrl);
             success = !actionResult.startsWith('Error');
           }
           break;
@@ -836,8 +836,8 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
         case 'search_web':
           final query = params['query'] as String? ?? '';
           if (query.isNotEmpty) {
-            final url = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
-            actionResult = await _appLauncher.openUrl(url);
+            final searchUrl = 'https://www.google.com/search?q=${Uri.encodeComponent(query)}';
+            actionResult = await _appLauncher.openUrl(searchUrl);
             success = !actionResult.startsWith('Error');
           }
           break;
