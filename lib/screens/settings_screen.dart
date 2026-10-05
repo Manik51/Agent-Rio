@@ -33,7 +33,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   late TextEditingController _apiKeyController;
   late TextEditingController _baseUrlController;
   late TextEditingController _modelController;
+  late TextEditingController _visionApiKeyController;
   bool _obscureKey = true;
+  bool _obscureVisionKey = true;
 
   String _selectedProviderId = 'groq';
 
@@ -55,6 +57,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     _apiKeyController = TextEditingController(text: widget.aiService.apiKey);
     _baseUrlController = TextEditingController(text: widget.aiService.baseUrl);
     _modelController = TextEditingController(text: widget.aiService.model);
+    // Load vision key from SharedPreferences
+    SharedPreferences.getInstance().then((prefs) {
+      _visionApiKeyController = TextEditingController(
+        text: prefs.getString('vision_api_key') ?? '',
+      );
+    });
+    _visionApiKeyController = TextEditingController();
 
     _detectProviderFromUrl();
 
@@ -108,6 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _apiKeyController.removeListener(_autoSave);
+    _visionApiKeyController.dispose();
     _baseUrlController.removeListener(_autoSave);
     _modelController.removeListener(_autoSave);
     _apiKeyController.dispose();
@@ -171,6 +181,10 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('api_key', apiKey);
+    final visionKey = _visionApiKeyController.text.trim();
+    if (visionKey.isNotEmpty) {
+      await prefs.setString('vision_api_key', visionKey);
+    }
     await prefs.setString('api_base_url', baseUrl);
     await prefs.setString('api_model', model);
     await prefs.setString('rio_selected_provider', _selectedProviderId);
@@ -902,6 +916,103 @@ class _SettingsScreenState extends State<SettingsScreen>
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+
+
+          // 3. VISION ENGINE CARD (Phase 3)
+          _buildCard(
+            icon: Icons.remove_red_eye_rounded,
+            iconColor: const Color(0xFF8B5CF6),
+            title: 'Vision Engine (Phase 3)',
+            subtitle: 'Gemini Vision — finds UI elements by sight, not XML',
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E0A3C).withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.4)),
+                ),
+                child: const Text(
+                  '🧿 Rio uses Gemini Vision to SEE your screen like a human. '
+                  'When text-based tapping fails, Vision Engine takes a screenshot '
+                  'and finds the exact pixel coordinates of any button or icon.',
+                  style: TextStyle(fontSize: 11.5, color: Color(0xFFCBD5E1)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _visionApiKeyController,
+                obscureText: _obscureVisionKey,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                decoration: _buildInputDecoration(
+                  labelText: 'Gemini Vision API Key',
+                  hintText: 'AIza...',
+                  prefixIcon: const Icon(Icons.remove_red_eye_outlined, size: 18, color: Color(0xFF8B5CF6)),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.content_paste_rounded, size: 18, color: Color(0xFF38BDF8)),
+                        tooltip: 'Paste from clipboard',
+                        onPressed: () async {
+                          final data = await Clipboard.getData('text/plain');
+                          if (data?.text != null) {
+                            setState(() => _visionApiKeyController.text = data!.text!.trim());
+                          }
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          _obscureVisionKey ? Icons.visibility_off : Icons.visibility,
+                          size: 18,
+                          color: const Color(0xFF64748B),
+                        ),
+                        onPressed: () => setState(() => _obscureVisionKey = !_obscureVisionKey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Get a free key at: aistudio.google.com/apikey',
+                style: TextStyle(fontSize: 10.5, color: const Color(0xFF64748B)),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final key = _visionApiKeyController.text.trim();
+                    if (key.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a Gemini API Key')),
+                      );
+                      return;
+                    }
+                    final prefs = await SharedPreferences.getInstance();
+                    await prefs.setString('vision_api_key', key);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✅ Vision API Key saved!'),
+                          backgroundColor: Color(0xFF8B5CF6),
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.save_rounded, size: 16, color: Colors.white),
+                  label: const Text('Save Vision Key', style: TextStyle(color: Colors.white, fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF8B5CF6),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
               ),

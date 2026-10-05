@@ -9,6 +9,7 @@ import 'task_history_logger.dart';
 import 'shizuku_service.dart';
 import 'skill_memory_service.dart';
 import 'recovery_engine.dart';
+import 'vision_engine_service.dart';
 import '../models/saved_skill.dart';
 
 /// Executes multi-step UI automation tasks using LLM-guided screen reading.
@@ -23,6 +24,7 @@ class TaskExecutor {
   final NotificationService _notificationService = NotificationService();
   final SkillMemoryService _skillMemory = SkillMemoryService();
   final RecoveryEngine _recoveryEngine = RecoveryEngine();
+  late final VisionEngineService _vision;
 
   /// Callback to report progress messages to the UI
   final void Function(String message)? onProgress;
@@ -40,7 +42,13 @@ class TaskExecutor {
   }) : _aiService = aiService,
        _screenService = screenService,
        _appLauncher = appLauncher,
-       _shizukuService = shizukuService;
+       _shizukuService = shizukuService {
+    _vision = VisionEngineService(
+      screen: screenService,
+      aiService: aiService,
+    );
+    _vision.syncApiKey();
+  }
 
   /// Cancel the currently running task — takes effect immediately
   void cancel() {
@@ -65,10 +73,11 @@ Respond with ONLY a JSON object (no markdown, no code fences):
 Available actions:
 - click_text: {"text": "exact text to click"} - Click an element by its visible text
 - click_at: {"x": 540, "y": 960} - Click at screen coordinates (use bounds from screen dump)
+- click_vision: {"description": "describe the visual element to tap"} - Use AI Vision to find and tap an unlabeled element (icon, image, button with no text). Use when click_text fails.
 - type_text: {"text": "hello", "field_hint": "optional hint"} - Type into the focused/first edit field
 - press_enter: {} - Press the Enter/Search key on the keyboard to submit a search/form
 - scroll: {"direction": "down"} - Scroll down/up on the current view
-- swipe: {"startX": 540, "startY": 2000, "endX": 540, "endY": 500} - Swipe from start to end coordinates (e.g. open app drawer, navigate carousels)
+- swipe: {"startX": 540, "startY": 2000, "endX": 540, "endY": 500} - Swipe from start to end coordinates
 - press_back: {} - Press the back button
 - press_home: {} - Press the home button
 - open_app: {"app_name": "WhatsApp"} - Open an app
@@ -79,12 +88,12 @@ Rules:
 - You will receive a TEXT DUMP of the accessibility tree containing exact text strings and center coordinates.
 - ALWAYS use the text dump to decide your next action.
 - If you need to click something, prefer using `click_text`. If the element does not have text, use `click_at` with the coordinates provided in the text dump.
+- Use `click_vision` ONLY for unlabeled elements with no text AND no coordinates (mic icons, camera buttons, unlabeled FABs).
 - When typing in a search box, you MUST click it first, wait a step, and THEN type.
 - After typing a search query, use `press_enter` once. If the screen does not change, click the exact visible suggestion text. Do not repeat the same submit action more than twice.
-- Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead of continuing to browse indefinitely.
+- Never scroll or swipe more than three times in a row. After three scrolls, choose the best visible result or take a different action instead.
 - Set is_complete=true ONLY when the task is fully done.
-- If you need to find something by scrolling, scroll and then check the screen again.
-- If you need to open an app (like Wikipedia, Spotify, etc.) and you cannot find it after a couple of scrolls, ASSUME it is not installed. Immediately open Chrome or Google to search for the info on the web instead.
+- If you need to open an app and cannot find it after a couple of scrolls, open Chrome or Google to search instead.
 - If stuck after 3 attempts, set is_complete=true and explain in reasoning.
 - Keep reasoning very brief (1 sentence)
 ''';
@@ -457,16 +466,46 @@ Step ${step + 1}/${_aiService.maxSteps}. Look at the text dump and coordinates. 
         case 'click_text':
           final text = params['text'] as String? ?? '';
           success = await _screenService.clickByText(text);
-          actionResult = success
-              ? 'Clicked "$text"'
-              : 'Could not find "$text" to click';
+          if (!success && _vision.hasApiKey) {
+            // Vision fallback: try to visually locate the element
+            _report('Vision fallback: looking for "$text" visually...');
+            final vr = await _vision.findElement(
+              'the UI element with text or label "$text" that I need to tap',
+            );
+            if (vr.found && vr.x != null && vr.y != null) {
+              success = await _screenService.clickAt(vr.x!, vr.y!);
+              actionResult = success
+                  ? 'Vision-clicked "$text" at (${vr.x!.round()}, ${vr.y!.round()})'
+                  : 'Vision found location but tap failed';
+            } else {
+              actionResult = 'Could not find "$text" — vision: ${vr.description}';
+            }
+          } else {
+            actionResult = success
+                ? 'Clicked "$text"'
+                : 'Could not find "$text" to click';
+          }
           break;
 
-        case 'click_at':
-          final x = (params['x'] as num?)?.toDouble() ?? 0;
-          final y = (params['y'] as num?)?.toDouble() ?? 0;
-          success = await _screenService.clickAt(x, y);
-          actionResult = success ? 'Clicked at ($x, $y)' : 'Click failed';
+        case 'click_vision':
+          // Explicit vision-only tap for unlabeled elements
+          final description = params['description'] as String? ?? '';
+          _report('Vision tap: "$description"...');
+          if (!_vision.hasApiKey) {
+            actionResult = 'Vision Engine needs a Gemini API key. Add it in Settings.';
+            success = false;
+          } else {
+            final vr = await _vision.findElement(description);
+            if (vr.found && vr.x != null && vr.y != null) {
+              success = await _screenService.clickAt(vr.x!, vr.y!);
+              actionResult = success
+                  ? 'Vision-tapped "$description" at (${vr.x!.round()}, ${vr.y!.round()})'
+                  : 'Vision found element but tap gesture failed';
+            } else {
+              actionResult = 'Vision could not find "$description": ${vr.description}';
+              success = false;
+            }
+          }
           break;
 
         case 'type_text':

@@ -244,7 +244,13 @@ Keep answers concise, helpful, and natural.
     _maxTokens = prefs.getInt('api_max_tokens') ?? 1024;
     _useScreenCompression = prefs.getBool('api_use_screen_compression') ?? true;
     _useSystemPrompt = prefs.getBool('api_use_system_prompt') ?? true;
+    _visionApiKey = prefs.getString('vision_api_key');
   }
+
+  String? _visionApiKey;
+
+  /// Gemini Vision API key for Phase 3 Vision Engine.
+  String? get visionApiKey => _visionApiKey;
 
   Future<void> saveSettings({
     required String apiKey,
